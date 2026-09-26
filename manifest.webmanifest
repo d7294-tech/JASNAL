@@ -1,0 +1,13 @@
+{
+  "name": "FC 우리풋살 JASNAL",
+  "short_name": "JASNAL",
+  "description": "풋살 동호회 일정, 회원, 회비, 공지 관리",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#242526",
+  "theme_color": "#0b5d42",
+  "lang": "ko-KR",
+  "orientation": "portrait-primary",
+  "icons": []
+}

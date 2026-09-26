@@ -258,6 +258,12 @@
       padding:16px;
     }
     .menu button:last-child{border-bottom:0}
+    .notice-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
+    .notice-title{font-weight:800}
+    .notice-meta{font-size:11px;color:var(--muted);margin-top:5px}
+    .notice-body{font-size:13px;line-height:1.55;margin-top:10px;white-space:pre-wrap}
+    .notice-actions{display:flex;gap:8px;margin-top:10px}
+    .notice-actions button{flex:1}
     @media (max-width:380px){
       .app{padding-left:10px;padding-right:10px}
       .day{min-height:76px;padding:3px}
@@ -345,9 +351,11 @@
       </button>
 
       <div class="card">
-        <div class="title" style="font-size:16px;margin-bottom:12px">공지사항</div>
-        <div class="row" style="margin-bottom:10px"><span>11월 정기 경기 안내</span><span class="sub">10.25</span></div>
-        <div class="row"><span>풋살장 변경 안내</span><span class="sub">10.20</span></div>
+        <div class="row" style="margin-bottom:12px">
+          <div class="title" style="font-size:16px">공지사항</div>
+          <button id="homeNoticeMore" class="secondary" type="button" style="padding:6px 9px">전체</button>
+        </div>
+        <div id="homeNoticeList"></div>
       </div>
     </section>
 
@@ -424,7 +432,19 @@
 
 
     
-    <section id="more" class="screen">
+    
+    <section id="notices" class="screen">
+      <div class="row" style="margin-bottom:12px">
+        <div>
+          <div class="title">공지사항</div>
+          <div class="sub" style="margin-top:4px">동호회 공지 및 안내</div>
+        </div>
+        <button id="newNoticeBtn" class="secondary" type="button">+ 공지</button>
+      </div>
+      <div id="noticeList" class="list"></div>
+    </section>
+
+<section id="more" class="screen">
       <div class="card">
         <div class="title">FC 우리풋살</div>
         <div id="moreMemberCount" class="sub" style="margin-top:5px"></div>
@@ -472,7 +492,7 @@
       <div class="card menu" style="padding:0;margin-top:12px">
         <button>구장 정보</button>
         <button>회비 관리</button>
-        <button>공지사항</button>
+        <button id="openNoticesBtn" type="button">공지사항</button>
         <button>설정</button>
       </div>
     </section>
@@ -480,6 +500,35 @@
   </main>
 
 
+
+
+  <div id="noticeModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noticeModalTitle">
+      <div class="row">
+        <h3 id="noticeModalTitle">공지 등록</h3>
+        <button id="closeNoticeModal" class="secondary" type="button">닫기</button>
+      </div>
+      <form id="noticeForm">
+        <input id="noticeId" type="hidden">
+        <label>제목<input id="noticeTitleInput" required placeholder="공지 제목"></label>
+        <label>구분
+          <select id="noticeCategory" class="search" style="margin-top:5px">
+            <option>일반</option>
+            <option>경기</option>
+            <option>회비</option>
+            <option>긴급</option>
+          </select>
+        </label>
+        <label>내용
+          <textarea id="noticeBody" class="search" style="min-height:120px;margin-top:5px" placeholder="공지 내용을 입력하세요."></textarea>
+        </label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+      <div id="noticeDeleteWrap" style="display:none">
+        <button id="deleteNoticeBtn" class="primary danger" type="button">공지 삭제</button>
+      </div>
+    </div>
+  </div>
 
   <div id="voteListModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="voteListTitle">
@@ -578,6 +627,7 @@ const state={
   selected:'2026-10-01',
   schedule:{},
   events:{},
+  notices:[],
   matches:[
     {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
   ],
@@ -748,6 +798,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'matches'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'votes'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'notices'},scheduleRemoteReload)
     .subscribe();
 }
 
@@ -759,12 +810,18 @@ function scheduleRemoteReload(){
 async function loadRemoteState(){
   if(!supabase)return;
   try{
-    const [{data:matches,error:me},{data:members,error:mbe},{data:votes,error:ve}] = await Promise.all([
+    const [
+      {data:matches,error:me},
+      {data:members,error:mbe},
+      {data:votes,error:ve},
+      {data:notices,error:ne}
+    ] = await Promise.all([
       supabase.from('matches').select('*').order('match_date',{ascending:true}),
       supabase.from('members').select('*').order('name',{ascending:true}),
-      supabase.from('votes').select('*')
+      supabase.from('votes').select('*'),
+      supabase.from('notices').select('*').order('created_at',{ascending:false})
     ]);
-    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;
+    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;
 
     const mine=currentUser?.id||deviceId();
     const memberNameByAuthId={};
@@ -806,11 +863,21 @@ async function loadRemoteState(){
       authUserId:m.auth_user_id||null
     }));
 
+    state.notices=(notices||[]).map(n=>({
+      id:Number(n.id),
+      title:n.title,
+      category:n.category||'일반',
+      body:n.body||'',
+      authorName:n.author_name||'',
+      createdAt:n.created_at
+    }));
+
     saveState();
     rebuildEventsFromMatches();
     renderCalendar();
     renderMatches();
     renderMembers();
+    renderNotices();
     refreshHome();
     applyRoleVisibility();
     setSyncStatus('Cloud 연결됨 · 최신 데이터',true);
@@ -864,11 +931,32 @@ async function remoteDeleteMember(id){
 }
 
 
+
+async function remoteUpsertNotice(item){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('notices').upsert({
+    id:item.id,
+    title:item.title,
+    category:item.category,
+    body:item.body,
+    author_name:item.authorName||currentMember?.name||currentUser?.email||'',
+    author_user_id:currentUser?.id||null
+  });
+  if(error)throw error;
+}
+
+async function remoteDeleteNotice(id){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('notices').delete().eq('id',id);
+  if(error)throw error;
+}
+
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       matches: state.matches,
-      members: state.members
+      members: state.members,
+      notices: state.notices
     }));
   }catch(e){}
 }
@@ -884,6 +972,7 @@ function loadState(){
         ? {id:1000+i,name:m,group:'1그룹',role:'회원',status:'활동중'}
         : m);
     }
+    if(Array.isArray(saved.notices)) state.notices=saved.notices;
   }catch(e){}
 }
 
@@ -994,6 +1083,144 @@ document.querySelectorAll('.vote').forEach(btn=>{
     }
     renderMatches();
   });
+});
+
+
+function formatNoticeDate(ts){
+  if(!ts)return '';
+  const d=new Date(ts);
+  return `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function renderNotices(){
+  const list=[...state.notices].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+
+  if($('noticeList')){
+    $('noticeList').innerHTML=list.length ? list.map(n=>`
+      <div class="notice-card">
+        <div class="row">
+          <div>
+            <div class="notice-title">${n.title}</div>
+            <div class="notice-meta">${n.category} · ${formatNoticeDate(n.createdAt)}${n.authorName?` · ${n.authorName}`:''}</div>
+          </div>
+          <span class="pill">${n.category}</span>
+        </div>
+        ${n.body?`<div class="notice-body">${n.body}</div>`:''}
+        ${isManager()?`
+          <div class="notice-actions">
+            <button class="secondary edit-notice" data-id="${n.id}" type="button">수정</button>
+          </div>`:''}
+      </div>`).join('') : '<div class="card"><div class="sub">등록된 공지가 없습니다.</div></div>';
+
+    document.querySelectorAll('.edit-notice').forEach(b=>b.addEventListener('click',()=>{
+      openNoticeModal(Number(b.dataset.id));
+    }));
+  }
+
+  if($('homeNoticeList')){
+    const top=list.slice(0,3);
+    $('homeNoticeList').innerHTML=top.length ? top.map(n=>`
+      <button class="home-link" type="button" style="margin-bottom:8px;padding:10px 12px" data-notice-home="${n.id}">
+        <div class="row">
+          <span>${n.title}</span>
+          <span class="sub">${formatNoticeDate(n.createdAt)}</span>
+        </div>
+      </button>`).join('') : '<div class="sub">등록된 공지가 없습니다.</div>';
+
+    document.querySelectorAll('[data-notice-home]').forEach(b=>b.addEventListener('click',()=>{
+      showScreen('notices');
+      document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+      const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
+      if(moreBtn)moreBtn.classList.add('active');
+    }));
+  }
+
+  if($('newNoticeBtn')) $('newNoticeBtn').style.display=isManager()?'inline-block':'none';
+}
+
+function openNoticeModal(id=null){
+  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
+  const editing=id!==null;
+  $('noticeModalTitle').textContent=editing?'공지 수정':'공지 등록';
+  $('noticeDeleteWrap').style.display=editing?'block':'none';
+
+  if(editing){
+    const n=state.notices.find(x=>x.id===id);
+    if(!n)return;
+    $('noticeId').value=n.id;
+    $('noticeTitleInput').value=n.title||'';
+    $('noticeCategory').value=n.category||'일반';
+    $('noticeBody').value=n.body||'';
+  }else{
+    $('noticeId').value='';
+    $('noticeTitleInput').value='';
+    $('noticeCategory').value='일반';
+    $('noticeBody').value='';
+  }
+
+  $('noticeModal').classList.add('show');
+  $('noticeModal').setAttribute('aria-hidden','false');
+}
+
+function closeNoticeModal(){
+  $('noticeModal').classList.remove('show');
+  $('noticeModal').setAttribute('aria-hidden','true');
+}
+
+$('newNoticeBtn').addEventListener('click',()=>openNoticeModal());
+$('closeNoticeModal').addEventListener('click',closeNoticeModal);
+$('noticeModal').addEventListener('click',e=>{
+  if(e.target===$('noticeModal'))closeNoticeModal();
+});
+
+$('noticeForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
+  const id=$('noticeId').value?Number($('noticeId').value):Date.now();
+  const existing=state.notices.find(x=>x.id===id);
+  const item={
+    id,
+    title:$('noticeTitleInput').value.trim(),
+    category:$('noticeCategory').value,
+    body:$('noticeBody').value.trim(),
+    authorName:existing?.authorName||currentMember?.name||currentUser?.email||'',
+    createdAt:existing?.createdAt||new Date().toISOString()
+  };
+  if(!item.title)return;
+  const idx=state.notices.findIndex(x=>x.id===id);
+  if(idx>=0)state.notices[idx]=item;
+  else state.notices.push(item);
+  saveState();
+  try{ await remoteUpsertNotice(item); }catch(err){ setSyncStatus('공지 저장 동기화 실패: '+err.message,false); }
+  closeNoticeModal();
+  renderNotices();
+});
+
+$('deleteNoticeBtn').addEventListener('click',async ()=>{
+  if(!isManager())return;
+  const id=Number($('noticeId').value);
+  if(!id)return;
+  const n=state.notices.find(x=>x.id===id);
+  if(n && confirm(`${n.title} 공지를 삭제할까요?`)){
+    state.notices=state.notices.filter(x=>x.id!==id);
+    saveState();
+    try{ await remoteDeleteNotice(id); }catch(err){ setSyncStatus('공지 삭제 동기화 실패: '+err.message,false); }
+    closeNoticeModal();
+    renderNotices();
+  }
+});
+
+$('openNoticesBtn').addEventListener('click',()=>{
+  showScreen('notices');
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
+  if(moreBtn)moreBtn.classList.add('active');
+});
+$('homeNoticeMore').addEventListener('click',()=>{
+  showScreen('notices');
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
+  if(moreBtn)moreBtn.classList.add('active');
 });
 
 function classFor(v){
@@ -1639,6 +1866,7 @@ rebuildEventsFromMatches();
 renderCalendar();
 renderMatches();
 renderMembers();
+renderNotices();
 refreshHome();
 initSupabase();
 </script>

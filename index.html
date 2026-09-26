@@ -279,6 +279,7 @@
     .attendance-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
     .attendance-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 4px;font-size:12px;font-weight:800}
     .attendance-btn.active{background:var(--green-soft);border-color:var(--green);color:var(--green-dark)}
+    .attendance-btn:disabled{opacity:.55;cursor:not-allowed}
     .attendance-note{font-size:11px;color:var(--muted);margin-top:7px}
     .attendance-view-btn{width:100%;margin-top:8px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px;font-weight:800}
     .vote-list-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
@@ -965,6 +966,7 @@ document.querySelectorAll('.vote').forEach(btn=>{
   btn.addEventListener('click',async ()=>{
     const next=getNextMatch();
     if(!next)return;
+    if(isMatchClosed(next)){ alert('경기가 종료되어 투표가 마감되었습니다.'); return; }
     if(remoteReady && !currentUser){ alert('로그인 후 투표할 수 있습니다.'); return; }
     if(remoteReady && !isApproved()){ alert('가입 승인 후 투표할 수 있습니다.'); return; }
     if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null,yesNames:[],noNames:[],maybeNames:[]};
@@ -1076,11 +1078,26 @@ function formatKoreanDate(dateStr){
   return `${m}월 ${d}일 (${dow})`;
 }
 
+function parseLocalDateTime(dateStr,timeStr){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const [hh,mm]=(timeStr||'00:00').split(':').map(Number);
+  return new Date(y,m-1,d,hh||0,mm||0,0,0);
+}
+
+function getMatchEndDate(match){
+  // If no end time is entered, fall back to start time.
+  return parseLocalDateTime(match.date,match.endTime||match.time);
+}
+
+function isMatchClosed(match){
+  return new Date() >= getMatchEndDate(match);
+}
+
 function getNextMatch(){
-  const nowKey='2026-09-26T00:00'; // app prototype reference date
+  // Keep the current match on the home screen until its END time.
   return [...state.matches]
     .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))
-    .find(m => `${m.date}T${m.time}` >= nowKey) || null;
+    .find(m => !isMatchClosed(m)) || null;
 }
 
 function refreshHome(){
@@ -1103,18 +1120,20 @@ function refreshHome(){
     return;
   }
 
-  document.querySelectorAll('.vote').forEach(b=>b.disabled=false);
+  const homeClosed=isMatchClosed(next);
+  document.querySelectorAll('.vote').forEach(b=>b.disabled=homeClosed);
 
   const [y,m,d]=next.date.split('-').map(Number);
   const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
   titleEl.textContent=`${m}월 ${d}일 (${dow}) ${next.time}`;
   placeEl.textContent=next.place;
 
-  const ref=Date.UTC(2026,8,26);
-  const target=Date.UTC(y,m-1,d);
-  const diff=Math.ceil((target-ref)/86400000);
+  const now=new Date();
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const target=new Date(y,m-1,d);
+  const diff=Math.round((target-today)/86400000);
   ddayEl.style.display='inline-block';
-  ddayEl.textContent=diff>=0?`D-${diff}`:`D+${Math.abs(diff)}`;
+  ddayEl.textContent=diff===0?'D-DAY':(diff>0?`D-${diff}`:`D+${Math.abs(diff)}`);
 
   if(!next.attendance) next.attendance={yes:0,no:0,maybe:0,myVote:null};
   const votes=document.querySelectorAll('.vote');
@@ -1125,9 +1144,11 @@ function refreshHome(){
     if(strong)strong.textContent=vals[i];
     b.classList.toggle('active', next.attendance.myVote===map[b.dataset.vote]);
   });
-  $('voteMsg').textContent=next.attendance.myVote
-    ? `내 선택: ${{yes:'참석',no:'불참',maybe:'미정'}[next.attendance.myVote]}`
-    : '참석 여부를 선택하세요.';
+  $('voteMsg').textContent=homeClosed
+    ? '경기 종료 · 투표 마감'
+    : (next.attendance.myVote
+      ? `내 선택: ${{yes:'참석',no:'불참',maybe:'미정'}[next.attendance.myVote]}`
+      : '참석 여부를 선택하세요.');
 }
 
 
@@ -1185,14 +1206,16 @@ function renderMatches(){
           <div class="sub" style="margin-top:3px">${m.place}</div>
           ${m.memo?`<div class="sub" style="margin-top:5px">메모: ${m.memo}</div>`:''}
         </div>
-        <span class="pill">경기</span>
+        <span class="pill">${isMatchClosed(m)?'마감':'경기'}</span>
       </div>
       <div class="attendance-grid">
-        <button class="attendance-btn ${m.attendance?.myVote==='yes'?'active':''}" data-id="${m.id}" data-vote="yes" type="button">참석<br>${m.attendance?.yes||0}</button>
-        <button class="attendance-btn ${m.attendance?.myVote==='no'?'active':''}" data-id="${m.id}" data-vote="no" type="button">불참<br>${m.attendance?.no||0}</button>
-        <button class="attendance-btn ${m.attendance?.myVote==='maybe'?'active':''}" data-id="${m.id}" data-vote="maybe" type="button">미정<br>${m.attendance?.maybe||0}</button>
+        <button class="attendance-btn ${m.attendance?.myVote==='yes'?'active':''}" data-id="${m.id}" data-vote="yes" type="button" ${isMatchClosed(m)?'disabled':''}>참석<br>${m.attendance?.yes||0}</button>
+        <button class="attendance-btn ${m.attendance?.myVote==='no'?'active':''}" data-id="${m.id}" data-vote="no" type="button" ${isMatchClosed(m)?'disabled':''}>불참<br>${m.attendance?.no||0}</button>
+        <button class="attendance-btn ${m.attendance?.myVote==='maybe'?'active':''}" data-id="${m.id}" data-vote="maybe" type="button" ${isMatchClosed(m)?'disabled':''}>미정<br>${m.attendance?.maybe||0}</button>
       </div>
-      <div class="attendance-note">${m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.'}</div>
+      <div class="attendance-note">${isMatchClosed(m)
+        ? '경기 종료 · 투표 마감'
+        : (m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.')}</div>
       <button class="attendance-view-btn vote-list-btn" data-id="${m.id}" type="button">투표 인원 보기</button>
       <div class="match-actions">
         ${isManager()?`<button class="secondary edit-match" data-id="${m.id}">수정</button>`:''}
@@ -1210,6 +1233,7 @@ function renderMatches(){
     if(remoteReady && !isApproved()){ alert('가입 승인 후 투표할 수 있습니다.'); return; }
     const m=state.matches.find(x=>x.id===id);
     if(!m)return;
+    if(isMatchClosed(m)){ alert('경기가 종료되어 투표가 마감되었습니다.'); return; }
     if(!m.attendance)m.attendance={yes:0,no:0,maybe:0,myVote:null,yesNames:[],noNames:[],maybeNames:[]};
 
     const prev=m.attendance.myVote;
@@ -1564,6 +1588,10 @@ $('connectSupabase').addEventListener('click',async ()=>{
   localStorage.setItem(SB_ANON_KEY,key);
   setSyncStatus('연결 확인 중...');
   await initSupabase();
+setInterval(()=>{
+  refreshHome();
+  renderMatches();
+},60000);
 renderAuthState();
 });
 

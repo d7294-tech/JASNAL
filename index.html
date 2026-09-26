@@ -260,6 +260,21 @@
       .day{min-height:76px;padding:3px}
       .tag{font-size:8px}
     }
+
+    .modal-backdrop{
+      position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;
+      align-items:flex-end;justify-content:center;z-index:50;padding:12px;
+    }
+    .modal-backdrop.show{display:flex}
+    .modal{
+      width:min(520px,100%);background:var(--card);border-radius:20px 20px 14px 14px;
+      border:1px solid var(--line);padding:16px;max-height:88vh;overflow:auto;
+    }
+    .modal h3{margin:0 0 12px;font-size:18px}
+    .modal .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+    .danger{background:#7f1d1d!important;color:#fff!important;border:0!important}
+    .match-actions{display:flex;gap:8px;margin-top:10px}
+    .match-actions button{flex:1}
   </style>
 </head>
 <body>
@@ -320,21 +335,18 @@
 
       </section>
 
+    
     <section id="matches" class="screen">
       <div class="row" style="margin-bottom:12px">
-        <div class="title">경기일정</div>
+        <div>
+          <div class="title">경기일정</div>
+          <div class="sub" style="margin-top:4px">등록한 경기는 캘린더에 자동 표시됩니다.</div>
+        </div>
         <button id="newMatchBtn" class="secondary">+ 경기</button>
       </div>
       <div id="matchList" class="list"></div>
-
-      <form id="matchForm" class="card form">
-        <label>경기명<input id="matchTitle" value="정기 경기" required></label>
-        <label>날짜<input id="matchDate" type="date" value="2026-11-21" required></label>
-        <label>시간<input id="matchTime" type="time" value="20:00" required></label>
-        <label>장소<input id="matchPlace" value="영종 풋살장 A구장" required></label>
-        <button class="primary" type="submit">저장</button>
-      </form>
     </section>
+
 
     <section id="members" class="screen">
       <div class="row" style="margin-bottom:12px">
@@ -359,6 +371,29 @@
     </section>
   </main>
 
+
+  <div id="matchModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle">
+      <div class="row">
+        <h3 id="matchModalTitle">경기 등록</h3>
+        <button id="closeMatchModal" class="secondary" type="button">닫기</button>
+      </div>
+      <form id="matchForm">
+        <input id="matchId" type="hidden">
+        <label>경기명<input id="matchTitle" value="정기 경기" required></label>
+        <label>날짜<input id="matchDate" type="date" value="2026-11-21" required></label>
+        <label>시작 시간<input id="matchTime" type="time" value="20:00" required></label>
+        <label>종료 시간<input id="matchEndTime" type="time" value="22:00" required></label>
+        <label>장소<input id="matchPlace" value="영종 풋살장 A구장" required></label>
+        <label>메모<input id="matchMemo" placeholder="예: 구장비 140,000원 / 19:50 집합"></label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+      <div id="editDeleteWrap" style="display:none">
+        <button id="deleteMatchBtn" class="primary danger" type="button">경기 삭제</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="nav">
     <button class="nav-btn active" data-screen="home"><span class="ico">⌂</span>홈</button>
     <button class="nav-btn" data-screen="calendar"><span class="ico">▣</span>캘린더</button>
@@ -373,11 +408,9 @@ const state={
   month:9,
   selected:'2026-10-01',
   schedule:{},
-  events:{
-    '2026-11-21':['정기 경기 20:00 · 영종 풋살장 A구장']
-  },
+  events:{},
   matches:[
-    {title:'정기 경기',date:'2026-11-21',time:'20:00',place:'영종 풋살장 A구장'}
+    {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:''}
   ],
   members:['김민수','이준호','박지훈','최영민','정우현','한지수']
 };
@@ -535,29 +568,114 @@ $('nextMonth').addEventListener('click',()=>{
 
 
 
-function renderMatches(){
-  $('matchList').innerHTML=state.matches.map(m=>`
-    <div class="list-item">
-      <div style="font-weight:800">${m.title}</div>
-      <div class="sub" style="margin-top:5px">${m.date} · ${m.time}</div>
-      <div class="sub" style="margin-top:3px">${m.place}</div>
-    </div>`).join('');
+
+function rebuildEventsFromMatches(){
+  state.events = {};
+  state.matches.forEach(m=>{
+    const text = `${m.title} ${m.time}${m.endTime ? `~${m.endTime}` : ''} · ${m.place}`;
+    (state.events[m.date]||(state.events[m.date]=[])).push(text);
+  });
 }
-$('newMatchBtn').addEventListener('click',()=>$('matchForm').classList.toggle('show'));
+
+function formatKoreanDate(dateStr){
+  const [y,m,d]=dateStr.split('-').map(Number);
+  const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
+  return `${m}월 ${d}일 (${dow})`;
+}
+
+function renderMatches(){
+  rebuildEventsFromMatches();
+  renderCalendar();
+  const sorted=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  $('matchList').innerHTML=sorted.length ? sorted.map(m=>`
+    <div class="list-item">
+      <div class="row">
+        <div>
+          <div style="font-weight:800">${m.title}</div>
+          <div class="sub" style="margin-top:5px">${formatKoreanDate(m.date)} · ${m.time}${m.endTime?` ~ ${m.endTime}`:''}</div>
+          <div class="sub" style="margin-top:3px">${m.place}</div>
+          ${m.memo?`<div class="sub" style="margin-top:5px">메모: ${m.memo}</div>`:''}
+        </div>
+        <span class="pill">경기</span>
+      </div>
+      <div class="match-actions">
+        <button class="secondary edit-match" data-id="${m.id}">수정</button>
+        <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
+      </div>
+    </div>`).join('')
+    : '<div class="card"><div class="sub">등록된 경기가 없습니다.</div></div>';
+
+  document.querySelectorAll('.edit-match').forEach(b=>b.addEventListener('click',()=>openMatchModal(Number(b.dataset.id))));
+  document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
+    const [y,m,d]=b.dataset.date.split('-').map(Number);
+    state.year=y;state.month=m-1;state.selected=b.dataset.date;
+    showScreen('calendar');renderCalendar();
+  }));
+}
+
+function openMatchModal(id=null, presetDate=null){
+  const editing=id!==null;
+  $('matchModalTitle').textContent=editing?'경기 수정':'경기 등록';
+  $('editDeleteWrap').style.display=editing?'block':'none';
+  if(editing){
+    const m=state.matches.find(x=>x.id===id);
+    if(!m)return;
+    $('matchId').value=m.id;
+    $('matchTitle').value=m.title;
+    $('matchDate').value=m.date;
+    $('matchTime').value=m.time;
+    $('matchEndTime').value=m.endTime||'';
+    $('matchPlace').value=m.place;
+    $('matchMemo').value=m.memo||'';
+  }else{
+    $('matchId').value='';
+    $('matchTitle').value='정기 경기';
+    $('matchDate').value=presetDate||state.selected||'2026-11-21';
+    $('matchTime').value='20:00';
+    $('matchEndTime').value='22:00';
+    $('matchPlace').value='영종 풋살장 A구장';
+    $('matchMemo').value='';
+  }
+  $('matchModal').classList.add('show');
+  $('matchModal').setAttribute('aria-hidden','false');
+}
+
+function closeMatchModal(){
+  $('matchModal').classList.remove('show');
+  $('matchModal').setAttribute('aria-hidden','true');
+}
+
+$('newMatchBtn').addEventListener('click',()=>openMatchModal());
+$('closeMatchModal').addEventListener('click',closeMatchModal);
+$('matchModal').addEventListener('click',e=>{if(e.target===$('matchModal'))closeMatchModal();});
+
 $('matchForm').addEventListener('submit',e=>{
   e.preventDefault();
   const item={
+    id:$('matchId').value?Number($('matchId').value):Date.now(),
     title:$('matchTitle').value.trim(),
     date:$('matchDate').value,
     time:$('matchTime').value,
-    place:$('matchPlace').value.trim()
+    endTime:$('matchEndTime').value,
+    place:$('matchPlace').value.trim(),
+    memo:$('matchMemo').value.trim()
   };
-  if(!item.title||!item.date||!item.time||!item.place) return;
-  state.matches.push(item);
-  (state.events[item.date]||(state.events[item.date]=[])).push(`${item.title} ${item.time} · ${item.place}`);
+  if(!item.title||!item.date||!item.time||!item.place)return;
+  const idx=state.matches.findIndex(x=>x.id===item.id);
+  if(idx>=0) state.matches[idx]=item;
+  else state.matches.push(item);
+  closeMatchModal();
   renderMatches();
-  renderCalendar();
-  $('matchForm').classList.remove('show');
+});
+
+$('deleteMatchBtn').addEventListener('click',()=>{
+  const id=Number($('matchId').value);
+  if(!id)return;
+  if(confirm('이 경기를 삭제할까요?')){
+    state.matches=state.matches.filter(x=>x.id!==id);
+    closeMatchModal();
+    renderMatches();
+  }
 });
 
 function renderMembers(filter=''){
@@ -575,8 +693,8 @@ $('addMember').addEventListener('click',()=>{
   renderMembers($('memberSearch').value);
 });
 
+rebuildEventsFromMatches();
 renderCalendar();
-selectDate(state.selected);
 renderMatches();
 renderMembers();
 </script>

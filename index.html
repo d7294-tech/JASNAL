@@ -644,7 +644,7 @@ function renderMatches(){
         <button class="secondary edit-match" data-id="${m.id}">수정</button>
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
       </div>
-      <button class="delete-pick" data-id="${m.id}" type="button">이 경기 삭제</button>
+      <button class="delete-pick" data-id="${m.id}" type="button" hidden>이 경기 삭제</button>
     </div>`).join('')
     : '<div class="card"><div class="sub">등록된 경기가 없습니다.</div></div>';
 
@@ -667,19 +667,12 @@ function renderMatches(){
     }
     renderMatches();
   }));
-  document.querySelectorAll('.delete-pick').forEach(b=>b.addEventListener('click',()=>{
-    const id=Number(b.dataset.id);
-    const m=state.matches.find(x=>x.id===id);
-    if(m && confirm(`${m.title} (${m.date}) 경기를 삭제할까요?`)){
-      state.matches=state.matches.filter(x=>x.id!==id);
-      renderMatches();
-    }
-  }));
   document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
     const [y,m,d]=b.dataset.date.split('-').map(Number);
     state.year=y;state.month=m-1;state.selected=b.dataset.date;
     showScreen('calendar');renderCalendar();
   }));
+  if(typeof applyDeleteMode==='function') applyDeleteMode();
 }
 
 function openMatchModal(id=null, presetDate=null){
@@ -716,10 +709,28 @@ function closeMatchModal(){
 
 $('newMatchBtn').addEventListener('click',()=>openMatchModal());
 let deleteMode=false;
+function applyDeleteMode(){
+  document.querySelectorAll('.delete-pick').forEach(btn=>{
+    btn.hidden=!deleteMode;
+    btn.style.display=deleteMode?'block':'none';
+  });
+  $('deleteModeBtn').textContent=deleteMode?'취소':'삭제';
+}
 $('deleteModeBtn').addEventListener('click',()=>{
   deleteMode=!deleteMode;
-  $('matchList').classList.toggle('delete-mode',deleteMode);
-  $('deleteModeBtn').textContent=deleteMode?'완료':'삭제';
+  applyDeleteMode();
+});
+$('matchList').addEventListener('click',e=>{
+  const btn=e.target.closest('.delete-pick');
+  if(!btn)return;
+  const id=Number(btn.dataset.id);
+  const m=state.matches.find(x=>x.id===id);
+  if(!m)return;
+  if(confirm(`${m.title} (${m.date}) 경기를 삭제할까요?`)){
+    state.matches=state.matches.filter(x=>x.id!==id);
+    deleteMode=false;
+    renderMatches();
+  }
 });
 
 $('closeMatchModal').addEventListener('click',closeMatchModal);

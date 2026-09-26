@@ -285,6 +285,9 @@
     .member-card-actions{display:flex;gap:8px;margin-top:10px}
     .member-card-actions button{flex:1}
     .member-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .sync-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
+    .sync-status{font-size:12px;color:var(--muted);margin-top:8px}
+    .sync-ok{color:#059669}.sync-bad{color:#dc2626}
     .match-actions button{flex:1}
   </style>
 </head>
@@ -392,18 +395,38 @@
     </section>
 
 
+    
     <section id="more" class="screen">
       <div class="card">
         <div class="title">FC 우리풋살</div>
         <div id="moreMemberCount" class="sub" style="margin-top:5px"></div>
       </div>
-      <div class="card menu" style="padding:0">
+
+      <div class="sync-box">
+        <div class="title" style="font-size:16px">Cloud 연결</div>
+        <div class="sub" style="margin-top:4px">Supabase를 연결하면 다른 휴대폰/PC와 데이터가 자동 공유됩니다.</div>
+
+        <label style="display:block;margin-top:12px;font-size:13px;font-weight:700">Project URL</label>
+        <input id="supabaseUrl" class="search" style="margin-top:5px" placeholder="https://xxxx.supabase.co">
+
+        <label style="display:block;font-size:13px;font-weight:700">Anon / Publishable Key</label>
+        <input id="supabaseKey" class="search" style="margin-top:5px" placeholder="eyJ...">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button id="connectSupabase" class="primary" type="button" style="margin-top:0">연결 / 저장</button>
+          <button id="disconnectSupabase" class="secondary" type="button">연결 해제</button>
+        </div>
+        <div id="syncStatus" class="sync-status">현재: 이 기기에만 저장</div>
+      </div>
+
+      <div class="card menu" style="padding:0;margin-top:12px">
         <button>구장 정보</button>
         <button>회비 관리</button>
         <button>공지사항</button>
         <button>설정</button>
       </div>
     </section>
+
   </main>
 
 
@@ -470,7 +493,8 @@
     <button class="nav-btn" data-screen="more"><span class="ico">•••</span>더보기</button>
   </nav>
 
-<script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const state={
   year:2026,
   month:9,
@@ -491,6 +515,172 @@ const state={
 };
 
 const STORAGE_KEY='jasnal_state_v1';
+
+const SB_URL_KEY='jasnal_supabase_url';
+const SB_ANON_KEY='jasnal_supabase_anon';
+const DEVICE_KEY='jasnal_device_id';
+let supabase=null;
+let realtimeChannel=null;
+let remoteReady=false;
+let remoteReloadTimer=null;
+
+function deviceId(){
+  let id=localStorage.getItem(DEVICE_KEY);
+  if(!id){
+    id=(crypto.randomUUID ? crypto.randomUUID() : 'device-'+Date.now()+'-'+Math.random().toString(16).slice(2));
+    localStorage.setItem(DEVICE_KEY,id);
+  }
+  return id;
+}
+
+function setSyncStatus(text, ok=null){
+  const el=$('syncStatus');
+  if(!el)return;
+  el.textContent=text;
+  el.classList.remove('sync-ok','sync-bad');
+  if(ok===true)el.classList.add('sync-ok');
+  if(ok===false)el.classList.add('sync-bad');
+}
+
+async function initSupabase(){
+  const url=localStorage.getItem(SB_URL_KEY)||'';
+  const key=localStorage.getItem(SB_ANON_KEY)||'';
+  if($('supabaseUrl'))$('supabaseUrl').value=url;
+  if($('supabaseKey'))$('supabaseKey').value=key;
+
+  if(!url || !key){
+    supabase=null; remoteReady=false;
+    setSyncStatus('현재: 이 기기에만 저장');
+    return false;
+  }
+
+  try{
+    supabase=createClient(url,key);
+    const {error}=await supabase.from('matches').select('id').limit(1);
+    if(error)throw error;
+    remoteReady=true;
+    setSyncStatus('Cloud 연결됨 · 자동 동기화 중',true);
+    await loadRemoteState();
+    subscribeRealtime();
+    return true;
+  }catch(err){
+    console.error(err);
+    supabase=null; remoteReady=false;
+    setSyncStatus('연결 실패: '+(err?.message||'설정을 확인하세요.'),false);
+    return false;
+  }
+}
+
+function subscribeRealtime(){
+  if(!supabase)return;
+  if(realtimeChannel) supabase.removeChannel(realtimeChannel);
+  realtimeChannel=supabase
+    .channel('jasnal-live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'matches'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'members'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'votes'},scheduleRemoteReload)
+    .subscribe();
+}
+
+function scheduleRemoteReload(){
+  clearTimeout(remoteReloadTimer);
+  remoteReloadTimer=setTimeout(()=>loadRemoteState(),250);
+}
+
+async function loadRemoteState(){
+  if(!supabase)return;
+  try{
+    const [{data:matches,error:me},{data:members,error:mbe},{data:votes,error:ve}] = await Promise.all([
+      supabase.from('matches').select('*').order('match_date',{ascending:true}),
+      supabase.from('members').select('*').order('name',{ascending:true}),
+      supabase.from('votes').select('*')
+    ]);
+    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;
+
+    const mine=deviceId();
+    const voteGroups={};
+    for(const v of votes||[]){
+      if(!voteGroups[v.match_id]) voteGroups[v.match_id]={yes:0,no:0,maybe:0,myVote:null};
+      if(v.vote==='yes')voteGroups[v.match_id].yes++;
+      if(v.vote==='no')voteGroups[v.match_id].no++;
+      if(v.vote==='maybe')voteGroups[v.match_id].maybe++;
+      if(v.voter_id===mine)voteGroups[v.match_id].myVote=v.vote;
+    }
+
+    state.matches=(matches||[]).map(m=>({
+      id:Number(m.id),
+      title:m.title,
+      date:m.match_date,
+      time:(m.start_time||'').slice(0,5),
+      endTime:(m.end_time||'').slice(0,5),
+      place:m.place,
+      memo:m.memo||'',
+      attendance:voteGroups[m.id]||{yes:0,no:0,maybe:0,myVote:null}
+    }));
+
+    state.members=(members||[]).map(m=>({
+      id:Number(m.id),
+      name:m.name,
+      group:m.group_name,
+      role:m.role,
+      status:m.status
+    }));
+
+    saveState();
+    rebuildEventsFromMatches();
+    renderCalendar();
+    renderMatches();
+    renderMembers();
+    refreshHome();
+    setSyncStatus('Cloud 연결됨 · 최신 데이터',true);
+  }catch(err){
+    console.error(err);
+    setSyncStatus('동기화 오류: '+(err?.message||'다시 시도하세요.'),false);
+  }
+}
+
+async function remoteUpsertMatch(item){
+  if(!remoteReady)return;
+  const row={
+    id:item.id,title:item.title,match_date:item.date,start_time:item.time,
+    end_time:item.endTime||null,place:item.place,memo:item.memo||''
+  };
+  const {error}=await supabase.from('matches').upsert(row);
+  if(error)throw error;
+}
+
+async function remoteDeleteMatch(id){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('matches').delete().eq('id',id);
+  if(error)throw error;
+}
+
+async function remoteSetVote(matchId,vote){
+  if(!remoteReady)return;
+  const voter=deviceId();
+  if(!vote){
+    const {error}=await supabase.from('votes').delete().eq('match_id',matchId).eq('voter_id',voter);
+    if(error)throw error;
+  }else{
+    const {error}=await supabase.from('votes').upsert({match_id:matchId,voter_id:voter,vote});
+    if(error)throw error;
+  }
+}
+
+async function remoteUpsertMember(item){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('members').upsert({
+    id:item.id,name:item.name,group_name:item.group,role:item.role,status:item.status
+  });
+  if(error)throw error;
+}
+
+async function remoteDeleteMember(id){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('members').delete().eq('id',id);
+  if(error)throw error;
+}
+
 
 function saveState(){
   try{
@@ -587,7 +777,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.go)));
 
 document.querySelectorAll('.vote').forEach(btn=>{
-  btn.addEventListener('click',()=>{
+  btn.addEventListener('click',async ()=>{
     const next=getNextMatch();
     if(!next)return;
     if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
@@ -603,6 +793,9 @@ document.querySelectorAll('.vote').forEach(btn=>{
       next.attendance.myVote=vote;
     }
     saveState();
+    if(remoteReady){
+      try{ await remoteSetVote(next.id,next.attendance.myVote); }catch(err){ setSyncStatus('투표 동기화 실패: '+err.message,false); }
+    }
     renderMatches();
   });
 });
@@ -781,7 +974,7 @@ function renderMatches(){
     : '<div class="card"><div class="sub">등록된 경기가 없습니다.</div></div>';
 
   document.querySelectorAll('.edit-match').forEach(b=>b.addEventListener('click',()=>openMatchModal(Number(b.dataset.id))));
-  document.querySelectorAll('.attendance-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.attendance-btn').forEach(b=>b.addEventListener('click',async ()=>{
     const id=Number(b.dataset.id);
     const vote=b.dataset.vote;
     const m=state.matches.find(x=>x.id===id);
@@ -798,6 +991,9 @@ function renderMatches(){
       m.attendance.myVote=vote;
     }
     saveState();
+    if(remoteReady){
+      try{ await remoteSetVote(id,m.attendance.myVote); }catch(err){ setSyncStatus('투표 동기화 실패: '+err.message,false); }
+    }
     renderMatches();
   }));
   document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
@@ -853,7 +1049,7 @@ $('deleteModeBtn').addEventListener('click',()=>{
   deleteMode=!deleteMode;
   applyDeleteMode();
 });
-$('matchList').addEventListener('click',e=>{
+$('matchList').addEventListener('click',async e=>{
   const btn=e.target.closest('.delete-pick');
   if(!btn)return;
   const id=Number(btn.dataset.id);
@@ -862,6 +1058,7 @@ $('matchList').addEventListener('click',e=>{
   if(confirm(`${m.title} (${m.date}) 경기를 삭제할까요?`)){
     state.matches=state.matches.filter(x=>x.id!==id);
     saveState();
+    if(remoteReady){ try{ await remoteDeleteMatch(id); }catch(err){ setSyncStatus('삭제 동기화 실패: '+err.message,false); } }
     deleteMode=false;
     renderMatches();
   }
@@ -870,7 +1067,7 @@ $('matchList').addEventListener('click',e=>{
 $('closeMatchModal').addEventListener('click',closeMatchModal);
 $('matchModal').addEventListener('click',e=>{if(e.target===$('matchModal'))closeMatchModal();});
 
-$('matchForm').addEventListener('submit',e=>{
+$('matchForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const item={
     id:$('matchId').value?Number($('matchId').value):Date.now(),
@@ -890,16 +1087,20 @@ $('matchForm').addEventListener('submit',e=>{
   }
   else state.matches.push(item);
   saveState();
+  if(remoteReady){
+    try{ await remoteUpsertMatch(item); }catch(err){ setSyncStatus('경기 저장 동기화 실패: '+err.message,false); }
+  }
   closeMatchModal();
   renderMatches();
 });
 
-$('deleteMatchBtn').addEventListener('click',()=>{
+$('deleteMatchBtn').addEventListener('click',async ()=>{
   const id=Number($('matchId').value);
   if(!id)return;
   if(confirm('이 경기를 삭제할까요?')){
     state.matches=state.matches.filter(x=>x.id!==id);
     saveState();
+    if(remoteReady){ try{ await remoteDeleteMatch(id); }catch(err){ setSyncStatus('삭제 동기화 실패: '+err.message,false); } }
     closeMatchModal();
     renderMatches();
   }
@@ -980,7 +1181,7 @@ $('memberModal').addEventListener('click',e=>{
   if(e.target===$('memberModal')) closeMemberModal();
 });
 
-$('memberForm').addEventListener('submit',e=>{
+$('memberForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const item={
     id:$('memberId').value ? Number($('memberId').value) : Date.now(),
@@ -996,17 +1197,23 @@ $('memberForm').addEventListener('submit',e=>{
   else state.members.push(item);
 
   saveState();
+  if(remoteReady){
+    try{ await remoteUpsertMember(item); }catch(err){ setSyncStatus('회원 저장 동기화 실패: '+err.message,false); }
+  }
   closeMemberModal();
   renderMembers();
 });
 
-$('deleteMemberBtn').addEventListener('click',()=>{
+$('deleteMemberBtn').addEventListener('click',async ()=>{
   const id=Number($('memberId').value);
   if(!id)return;
   const m=state.members.find(x=>x.id===id);
   if(m && confirm(`${m.name} 회원을 삭제할까요?`)){
     state.members=state.members.filter(x=>x.id!==id);
     saveState();
+    if(remoteReady){
+      try{ await remoteDeleteMember(id); }catch(err){ setSyncStatus('회원 삭제 동기화 실패: '+err.message,false); }
+    }
     closeMemberModal();
     renderMembers();
   }
@@ -1016,12 +1223,34 @@ $('memberSearch').addEventListener('input',renderMembers);
 $('memberGroupFilter').addEventListener('change',renderMembers);
 $('memberStatusFilter').addEventListener('change',renderMembers);
 
+
+$('connectSupabase').addEventListener('click',async ()=>{
+  const url=$('supabaseUrl').value.trim();
+  const key=$('supabaseKey').value.trim();
+  if(!url || !key){ setSyncStatus('Project URL과 Key를 입력하세요.',false); return; }
+  localStorage.setItem(SB_URL_KEY,url);
+  localStorage.setItem(SB_ANON_KEY,key);
+  setSyncStatus('연결 확인 중...');
+  await initSupabase();
+});
+
+$('disconnectSupabase').addEventListener('click',()=>{
+  localStorage.removeItem(SB_URL_KEY);
+  localStorage.removeItem(SB_ANON_KEY);
+  if(realtimeChannel && supabase) supabase.removeChannel(realtimeChannel);
+  realtimeChannel=null; supabase=null; remoteReady=false;
+  $('supabaseUrl').value='';
+  $('supabaseKey').value='';
+  setSyncStatus('현재: 이 기기에만 저장');
+});
+
 loadState();
 rebuildEventsFromMatches();
 renderCalendar();
 renderMatches();
 renderMembers();
 refreshHome();
+initSupabase();
 </script>
 </body>
 </html>

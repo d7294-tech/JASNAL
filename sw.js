@@ -1,4 +1,4 @@
-const CACHE_NAME='jasnal-v4';
+const CACHE_NAME='jasnal-v5';
 const CORE=['./','./index.html','./manifest.webmanifest'];
 
 self.addEventListener('install',event=>{
@@ -29,5 +29,19 @@ self.addEventListener('fetch',event=>{
         return response;
       })
       .catch(()=>caches.match(event.request).then(r=>r||caches.match('./index.html')))
+  );
+});
+
+
+self.addEventListener('notificationclick',event=>{
+  event.notification.close();
+  const target=event.notification.data?.url || './';
+  event.waitUntil(
+    clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{
+      for(const client of list){
+        if('focus' in client)return client.focus();
+      }
+      if(clients.openWindow)return clients.openWindow(target);
+    })
   );
 });

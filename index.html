@@ -283,6 +283,9 @@
     .venue-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
     .venue-actions{display:flex;gap:8px;margin-top:10px}
     .venue-actions button,.venue-actions a{flex:1;text-align:center;text-decoration:none}
+    .notify-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
+    .notify-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+    .notify-row select{min-width:150px}
     @media (max-width:380px){
       .app{padding-left:10px;padding-right:10px}
       .day{min-height:76px;padding:3px}
@@ -474,7 +477,38 @@
     
     
     
-    <section id="venues" class="screen">
+    
+    <section id="settings" class="screen">
+      <div class="title" style="margin-bottom:12px">설정</div>
+
+      <div class="notify-card">
+        <div class="title" style="font-size:16px">경기 알림</div>
+        <div class="sub" style="margin-top:4px">앱을 열어둔 상태 또는 실행 시 경기 알림을 확인합니다.</div>
+
+        <div class="notify-row">
+          <span>알림 사용</span>
+          <button id="enableNotificationsBtn" class="secondary" type="button">권한 요청</button>
+        </div>
+
+        <div class="notify-row">
+          <span>알림 시점</span>
+          <select id="matchReminderTiming" class="secondary">
+            <option value="1440">1일 전</option>
+            <option value="180">3시간 전</option>
+            <option value="60">1시간 전</option>
+          </select>
+        </div>
+
+        <div id="notificationStatus" class="sync-status"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="title" style="font-size:16px">앱 정보</div>
+        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA</div>
+      </div>
+    </section>
+
+<section id="venues" class="screen">
       <div class="row" style="margin-bottom:12px">
         <div>
           <div class="title">구장 정보</div>
@@ -590,7 +624,7 @@
         <button id="openVenuesBtn" type="button">구장 정보</button>
         <button id="openDuesBtn" class="manager-only" type="button">회원 관리</button>
         <button id="openNoticesBtn" type="button">공지사항</button>
-        <button>설정</button>
+        <button id="openSettingsBtn" type="button">설정</button>
       </div>
     </section>
 
@@ -1487,6 +1521,26 @@ function closeVenueModal(){
   $('venueModal').setAttribute('aria-hidden','true');
 }
 
+
+$('openSettingsBtn').addEventListener('click',()=>{
+  showScreen('settings');
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
+  if(moreBtn)moreBtn.classList.add('active');
+
+  $('matchReminderTiming').value=String(getReminderMinutes());
+  updateNotificationStatus();
+});
+
+$('enableNotificationsBtn').addEventListener('click',requestNotificationPermission);
+
+$('matchReminderTiming').addEventListener('change',()=>{
+  localStorage.setItem(REMINDER_MINUTES_KEY,$('matchReminderTiming').value);
+  const notified=getNotifiedMatches();
+  setNotifiedMatches(notified);
+  checkMatchReminders();
+});
+
 $('openVenuesBtn').addEventListener('click',()=>{
   showScreen('venues');
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
@@ -1542,6 +1596,87 @@ $('deleteVenueBtn').addEventListener('click',async ()=>{
     populateMatchVenueSelect($('matchPlace')?.value||'',$('matchVenueSearch')?.value||'');
   }
 });
+
+
+const REMINDER_MINUTES_KEY='jasnal_match_reminder_minutes';
+const NOTIFIED_MATCHES_KEY='jasnal_notified_matches';
+
+function getReminderMinutes(){
+  return Number(localStorage.getItem(REMINDER_MINUTES_KEY)||1440);
+}
+
+function getNotifiedMatches(){
+  try{return JSON.parse(localStorage.getItem(NOTIFIED_MATCHES_KEY)||'{}');}
+  catch(e){return {};}
+}
+
+function setNotifiedMatches(obj){
+  localStorage.setItem(NOTIFIED_MATCHES_KEY,JSON.stringify(obj));
+}
+
+function updateNotificationStatus(){
+  if(!$('notificationStatus'))return;
+  if(!('Notification' in window)){
+    $('notificationStatus').textContent='이 브라우저는 알림을 지원하지 않습니다.';
+    return;
+  }
+  const p=Notification.permission;
+  $('notificationStatus').textContent=
+    p==='granted'?'알림 허용됨':
+    p==='denied'?'알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해주세요.':
+    '알림 권한이 아직 설정되지 않았습니다.';
+}
+
+async function requestNotificationPermission(){
+  if(!('Notification' in window)){
+    alert('이 브라우저는 알림을 지원하지 않습니다.');
+    return;
+  }
+  const result=await Notification.requestPermission();
+  updateNotificationStatus();
+  if(result==='granted') checkMatchReminders();
+}
+
+async function showMatchNotification(match){
+  const title='경기 알림';
+  const body=`${formatKoreanDate(match.date)} ${match.time} · ${match.place}`;
+  if('serviceWorker' in navigator){
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      await reg.showNotification(title,{
+        body,
+        tag:`match-${match.id}`,
+        data:{url:'./'}
+      });
+      return;
+    }catch(e){}
+  }
+  if(Notification.permission==='granted'){
+    new Notification(title,{body,tag:`match-${match.id}`});
+  }
+}
+
+function checkMatchReminders(){
+  if(!('Notification' in window) || Notification.permission!=='granted')return;
+
+  const mins=getReminderMinutes();
+  const now=Date.now();
+  const notified=getNotifiedMatches();
+
+  for(const m of state.matches){
+    if(isMatchClosed(m))continue;
+    const start=parseLocalDateTime(m.date,m.time).getTime();
+    const diffMin=(start-now)/60000;
+    const key=`${m.id}-${mins}`;
+
+    if(diffMin<=mins && diffMin>0 && !notified[key]){
+      showMatchNotification(m);
+      notified[key]=Date.now();
+    }
+  }
+
+  setNotifiedMatches(notified);
+}
 
 function currentMonthKey(){
   const d=new Date();
@@ -2559,6 +2694,8 @@ $('connectSupabase').addEventListener('click',async ()=>{
   if(!url || !key){ setSyncStatus('Project URL과 Key를 입력하세요.',false); return; }
   setSyncStatus('연결 확인 중...');
   await initSupabase();
+setTimeout(checkMatchReminders,3000);
+setInterval(checkMatchReminders,60000);
 setInterval(()=>{
   refreshHome();
   renderMatches();

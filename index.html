@@ -447,6 +447,13 @@
           <div class="dues-stat"><span class="sub">미납</span><b id="memberUnpaidCount" class="dues-unpaid">0</b></div>
           <div class="dues-stat"><span class="sub">총원</span><b id="memberTargetCount" class="dues-total">0</b></div>
         </div>
+
+        <select id="memberDuesPaidFilter" class="secondary" style="width:100%;min-height:42px;margin-bottom:10px">
+          <option value="">납부 상태 전체</option>
+          <option value="paid">납부</option>
+          <option value="unpaid">미납</option>
+        </select>
+
         <div id="memberDuesList" class="list"></div>
       </div>
 
@@ -1240,27 +1247,46 @@ function renderMemberDuesSummary(){
   const monthKey=$('memberDuesMonth').value||currentMonthKey();
   ensureDuesRows(monthKey);
 
-  const all=state.duesPayments.filter(d=>d.monthKey===monthKey)
+  const searchText=($('memberSearch')?.value||'').trim().toLowerCase();
+  const groupFilter=$('memberGroupFilter')?.value||'';
+  const statusFilter=$('memberStatusFilter')?.value||'';
+  const paidFilter=$('memberDuesPaidFilter')?.value||'';
+
+  const matchedMembers=state.members.filter(m=>{
+    const name=(m.name||'').toLowerCase();
+    return (!searchText || name.includes(searchText))
+      && (!groupFilter || m.group===groupFilter)
+      && (!statusFilter || m.status===statusFilter);
+  });
+
+  const memberIds=new Set(matchedMembers.map(m=>m.id));
+
+  const all=state.duesPayments
+    .filter(d=>d.monthKey===monthKey && memberIds.has(d.memberId))
     .map(d=>({...d,member:state.members.find(m=>m.id===d.memberId)}))
-    .filter(d=>d.member && d.member.status==='활동중');
+    .filter(d=>d.member);
 
   $('memberPaidCount').textContent=all.filter(d=>d.paid).length;
   $('memberUnpaidCount').textContent=all.filter(d=>!d.paid).length;
   $('memberTargetCount').textContent=all.length;
 
-  $('memberDuesList').innerHTML=all.length ? all
+  let visible=all;
+  if(paidFilter==='paid') visible=all.filter(d=>d.paid);
+  if(paidFilter==='unpaid') visible=all.filter(d=>!d.paid);
+
+  $('memberDuesList').innerHTML=visible.length ? visible
     .sort((a,b)=>(a.member.name||'').localeCompare(b.member.name||'','ko'))
     .map(d=>`
       <div class="list-item">
         <div class="dues-row">
           <div>
             <div style="font-weight:800">${d.member.name}</div>
-            <div class="sub" style="margin-top:4px">${d.member.group}</div>
+            <div class="sub" style="margin-top:4px">${d.member.group} · ${d.member.status}</div>
           </div>
           <span class="dues-status ${d.paid?'paid':'unpaid'}">${d.paid?'납부':'미납'}</span>
         </div>
       </div>`).join('')
-    : '<div class="sub">해당 월 회비 내역이 없습니다.</div>';
+    : '<div class="sub">조건에 맞는 회비 내역이 없습니다.</div>';
 }
 
 function currentMonthKey(){
@@ -1355,6 +1381,7 @@ function renderDues(){
 
 $('duesMonthSelect').addEventListener('change',renderDues);
 $('memberDuesMonth').addEventListener('change',renderMemberDuesSummary);
+$('memberDuesPaidFilter').addEventListener('change',renderMemberDuesSummary);
 $('duesFilter').addEventListener('change',renderDues);
 
 $('openDuesBtn').addEventListener('click',()=>{
@@ -2091,6 +2118,7 @@ $('memberForm').addEventListener('submit',async e=>{
   }
   closeMemberModal();
   renderMembers();
+  renderMemberDuesSummary();
 });
 
 $('deleteMemberBtn').addEventListener('click',async ()=>{
@@ -2108,9 +2136,9 @@ $('deleteMemberBtn').addEventListener('click',async ()=>{
   }
 });
 
-$('memberSearch').addEventListener('input',renderMembers);
-$('memberGroupFilter').addEventListener('change',renderMembers);
-$('memberStatusFilter').addEventListener('change',renderMembers);
+$('memberSearch').addEventListener('input',()=>{renderMembers();renderMemberDuesSummary();});
+$('memberGroupFilter').addEventListener('change',()=>{renderMembers();renderMemberDuesSummary();});
+$('memberStatusFilter').addEventListener('change',()=>{renderMembers();renderMemberDuesSummary();});
 
 
 

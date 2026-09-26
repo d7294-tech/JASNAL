@@ -215,6 +215,9 @@
       padding:10px 12px;
       font-weight:700;
     }
+    .match-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+    .match-tab{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px;font-weight:800}
+    .match-tab.active{background:var(--green-soft);border-color:var(--green);color:var(--green-dark)}
     .list{display:grid;gap:10px}
     .list-item{
       background:#fff;
@@ -375,6 +378,10 @@
           <button id="newMatchBtn" class="secondary">+ 경기</button>
           <button id="deleteModeBtn" class="secondary" type="button">삭제</button>
         </div>
+      </div>
+      <div class="match-tabs">
+        <button id="upcomingMatchTab" class="match-tab active" type="button">예정 경기</button>
+        <button id="pastMatchTab" class="match-tab" type="button">지난 경기</button>
       </div>
       <div id="matchList" class="list"></div>
     </section>
@@ -1192,11 +1199,30 @@ function closeVoteListModal(){
   $('voteListModal').setAttribute('aria-hidden','true');
 }
 
+let matchListMode='upcoming';
+
+function setMatchListMode(mode){
+  matchListMode=mode==='past'?'past':'upcoming';
+  $('upcomingMatchTab').classList.toggle('active',matchListMode==='upcoming');
+  $('pastMatchTab').classList.toggle('active',matchListMode==='past');
+  if($('deleteModeBtn')) $('deleteModeBtn').style.display=(matchListMode==='past'?'none':(isManager()?'inline-block':'none'));
+  if(matchListMode==='past') deleteMode=false;
+  renderMatches();
+}
+
+$('upcomingMatchTab').addEventListener('click',()=>setMatchListMode('upcoming'));
+$('pastMatchTab').addEventListener('click',()=>setMatchListMode('past'));
+
 function renderMatches(){
   rebuildEventsFromMatches();
   renderCalendar();
   refreshHome();
-  const sorted=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  const all=[...state.matches];
+  const sorted=(matchListMode==='past'
+    ? all.filter(m=>isMatchClosed(m)).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time))
+    : all.filter(m=>!isMatchClosed(m)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))
+  );
+
   $('matchList').innerHTML=sorted.length ? sorted.map(m=>`
     <div class="list-item">
       <div class="row">
@@ -1218,12 +1244,12 @@ function renderMatches(){
         : (m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.')}</div>
       <button class="attendance-view-btn vote-list-btn" data-id="${m.id}" type="button">투표 인원 보기</button>
       <div class="match-actions">
-        ${isManager()?`<button class="secondary edit-match" data-id="${m.id}">수정</button>`:''}
+        ${(!isMatchClosed(m) && isManager())?`<button class="secondary edit-match" data-id="${m.id}">수정</button>`:''}
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
       </div>
       <button class="delete-pick" data-id="${m.id}" type="button" hidden>이 경기 삭제</button>
     </div>`).join('')
-    : '<div class="card"><div class="sub">등록된 경기가 없습니다.</div></div>';
+    : `<div class="card"><div class="sub">${matchListMode==='past'?'지난 경기가 없습니다.':'예정된 경기가 없습니다.'}</div></div>`;
 
   document.querySelectorAll('.edit-match').forEach(b=>b.addEventListener('click',()=>openMatchModal(Number(b.dataset.id))));
   document.querySelectorAll('.attendance-btn').forEach(b=>b.addEventListener('click',async ()=>{
@@ -1299,8 +1325,10 @@ $('newMatchBtn').addEventListener('click',()=>{ if(['운영진','관리자'].inc
 let deleteMode=false;
 function applyDeleteMode(){
   document.querySelectorAll('.delete-pick').forEach(btn=>{
-    btn.hidden=!deleteMode;
-    btn.style.display=deleteMode?'block':'none';
+    const m=state.matches.find(x=>x.id===Number(btn.dataset.id));
+    const show=deleteMode && m && !isMatchClosed(m) && matchListMode==='upcoming';
+    btn.hidden=!show;
+    btn.style.display=show?'block':'none';
   });
   $('deleteModeBtn').textContent=deleteMode?'취소':'삭제';
 }

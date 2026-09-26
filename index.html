@@ -295,11 +295,11 @@
         <div class="row">
           <div>
             <div class="sub">다음 경기</div>
-            <div class="title" style="margin-top:4px">11월 21일 (토) 20:00</div>
+            <div id="homeNextMatchTitle" class="title" style="margin-top:4px">등록된 경기가 없습니다.</div>
           </div>
-          <span class="pill">D-3</span>
+          <span id="homeNextMatchDday" class="pill" style="display:none"></span>
         </div>
-        <div class="sub" style="margin-top:6px">영종 풋살장 A구장</div>
+        <div id="homeNextMatchPlace" class="sub" style="margin-top:6px"></div>
         <div class="vote-grid">
           <button class="vote" data-vote="참석">참석<br><strong>12</strong></button>
           <button class="vote" data-vote="불참">불참<br><strong>3</strong></button>
@@ -424,6 +424,27 @@ const state={
   members:['김민수','이준호','박지훈','최영민','정우현','한지수']
 };
 
+const STORAGE_KEY='jasnal_state_v1';
+
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      matches: state.matches,
+      members: state.members
+    }));
+  }catch(e){}
+}
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return;
+    const saved=JSON.parse(raw);
+    if(Array.isArray(saved.matches)) state.matches=saved.matches;
+    if(Array.isArray(saved.members)) state.members=saved.members;
+  }catch(e){}
+}
+
 const pad=n=>String(n).padStart(2,'0');
 const october2026 = [
   null,
@@ -497,7 +518,7 @@ document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=
 
 document.querySelectorAll('.vote').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    const next=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0];
+    const next=getNextMatch();
     if(!next)return;
     if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
     const map={참석:'yes',불참:'no',미정:'maybe'};
@@ -511,8 +532,7 @@ document.querySelectorAll('.vote').forEach(btn=>{
       next.attendance[vote]++;
       next.attendance.myVote=vote;
     }
-    document.querySelectorAll('.vote').forEach(x=>x.classList.toggle('active',next.attendance.myVote===map[x.dataset.vote]));
-    $('voteMsg').textContent=next.attendance.myVote?`${btn.dataset.vote}으로 선택했습니다.`:'선택을 취소했습니다.';
+    saveState();
     renderMatches();
   });
 });
@@ -606,22 +626,64 @@ function formatKoreanDate(dateStr){
   return `${m}월 ${d}일 (${dow})`;
 }
 
-function refreshHomeAttendance(){
-  const next=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0];
-  if(!next)return;
-  if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
+function getNextMatch(){
+  const nowKey='2026-09-26T00:00'; // app prototype reference date
+  return [...state.matches]
+    .sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))
+    .find(m => `${m.date}T${m.time}` >= nowKey) || null;
+}
+
+function refreshHome(){
+  const next=getNextMatch();
+  const titleEl=$('homeNextMatchTitle');
+  const placeEl=$('homeNextMatchPlace');
+  const ddayEl=$('homeNextMatchDday');
+
+  if(!next){
+    titleEl.textContent='등록된 경기가 없습니다.';
+    placeEl.textContent='';
+    ddayEl.style.display='none';
+    document.querySelectorAll('.vote').forEach(b=>{
+      const strong=b.querySelector('strong');
+      if(strong) strong.textContent='0';
+      b.classList.remove('active');
+      b.disabled=true;
+    });
+    $('voteMsg').textContent='경기를 등록하면 참석 투표가 표시됩니다.';
+    return;
+  }
+
+  document.querySelectorAll('.vote').forEach(b=>b.disabled=false);
+
+  const [y,m,d]=next.date.split('-').map(Number);
+  const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
+  titleEl.textContent=`${m}월 ${d}일 (${dow}) ${next.time}`;
+  placeEl.textContent=next.place;
+
+  const ref=Date.UTC(2026,8,26);
+  const target=Date.UTC(y,m-1,d);
+  const diff=Math.ceil((target-ref)/86400000);
+  ddayEl.style.display='inline-block';
+  ddayEl.textContent=diff>=0?`D-${diff}`:`D+${Math.abs(diff)}`;
+
+  if(!next.attendance) next.attendance={yes:0,no:0,maybe:0,myVote:null};
   const votes=document.querySelectorAll('.vote');
   const vals=[next.attendance.yes||0,next.attendance.no||0,next.attendance.maybe||0];
+  const map={참석:'yes',불참:'no',미정:'maybe'};
   votes.forEach((b,i)=>{
     const strong=b.querySelector('strong');
     if(strong)strong.textContent=vals[i];
+    b.classList.toggle('active', next.attendance.myVote===map[b.dataset.vote]);
   });
+  $('voteMsg').textContent=next.attendance.myVote
+    ? `내 선택: ${{yes:'참석',no:'불참',maybe:'미정'}[next.attendance.myVote]}`
+    : '참석 여부를 선택하세요.';
 }
 
 function renderMatches(){
   rebuildEventsFromMatches();
   renderCalendar();
-  refreshHomeAttendance();
+  refreshHome();
   const sorted=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
   $('matchList').innerHTML=sorted.length ? sorted.map(m=>`
     <div class="list-item">
@@ -665,6 +727,7 @@ function renderMatches(){
       m.attendance[vote]++;
       m.attendance.myVote=vote;
     }
+    saveState();
     renderMatches();
   }));
   document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
@@ -728,6 +791,7 @@ $('matchList').addEventListener('click',e=>{
   if(!m)return;
   if(confirm(`${m.title} (${m.date}) 경기를 삭제할까요?`)){
     state.matches=state.matches.filter(x=>x.id!==id);
+    saveState();
     deleteMode=false;
     renderMatches();
   }
@@ -755,6 +819,7 @@ $('matchForm').addEventListener('submit',e=>{
     state.matches[idx]=item;
   }
   else state.matches.push(item);
+  saveState();
   closeMatchModal();
   renderMatches();
 });
@@ -764,6 +829,7 @@ $('deleteMatchBtn').addEventListener('click',()=>{
   if(!id)return;
   if(confirm('이 경기를 삭제할까요?')){
     state.matches=state.matches.filter(x=>x.id!==id);
+    saveState();
     closeMatchModal();
     renderMatches();
   }
@@ -781,13 +847,16 @@ $('addMember').addEventListener('click',()=>{
   const name=prompt('회원 이름을 입력하세요.');
   if(!name||!name.trim()) return;
   state.members.push(name.trim());
+  saveState();
   renderMembers($('memberSearch').value);
 });
 
+loadState();
 rebuildEventsFromMatches();
 renderCalendar();
 renderMatches();
 renderMembers();
+refreshHome();
 </script>
 </body>
 </html>

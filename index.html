@@ -1945,7 +1945,11 @@ function findVenueForPlace(place){
 function openVenueInfoForMatch(match){
   const v=findVenueForPlace(match?.place);
   if(!v){
-    alert('등록된 구장 정보가 없습니다.');
+    $('venueInfoTitle').textContent=match?.place||'구장 정보';
+    $('venueInfoSub').textContent='';
+    $('venueInfoBody').innerHTML='<div class="card"><div class="sub">아직 등록된 구장 정보가 없습니다.</div></div>';
+    $('venueInfoModal').classList.add('show');
+    $('venueInfoModal').setAttribute('aria-hidden','false');
     return;
   }
 
@@ -1997,9 +2001,8 @@ function refreshHome(){
   titleEl.textContent=`${m}월 ${d}일 (${dow}) ${next.time}`;
   placeEl.textContent=next.place;
   const venueBtn=$('homeVenueInfoBtn');
-  const matchedVenue=findVenueForPlace(next.place);
   if(venueBtn){
-    venueBtn.style.display=matchedVenue?'block':'none';
+    venueBtn.style.display='block';
     venueBtn.dataset.matchId=next.id;
   }
 

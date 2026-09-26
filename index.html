@@ -280,6 +280,11 @@
     .attendance-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 4px;font-size:12px;font-weight:800}
     .attendance-btn.active{background:var(--green-soft);border-color:var(--green);color:var(--green-dark)}
     .attendance-note{font-size:11px;color:var(--muted);margin-top:7px}
+    .member-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+    .member-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:#f3f4f6;color:var(--text)}
+    .member-card-actions{display:flex;gap:8px;margin-top:10px}
+    .member-card-actions button{flex:1}
+    .member-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
     .match-actions button{flex:1}
   </style>
 </head>
@@ -357,19 +362,40 @@
     </section>
 
 
+    
     <section id="members" class="screen">
       <div class="row" style="margin-bottom:12px">
-        <div class="title">회원</div>
+        <div>
+          <div class="title">회원</div>
+          <div id="memberCount" class="sub" style="margin-top:4px"></div>
+        </div>
         <button id="addMember" class="secondary">+ 회원</button>
       </div>
+
       <input id="memberSearch" class="search" placeholder="이름 검색">
+
+      <div class="row" style="margin-bottom:10px">
+        <select id="memberGroupFilter" class="secondary" style="flex:1;min-height:44px">
+          <option value="">전체 그룹</option>
+          <option>1그룹</option>
+          <option>2그룹</option>
+          <option>3그룹</option>
+        </select>
+        <select id="memberStatusFilter" class="secondary" style="flex:1;min-height:44px">
+          <option value="">전체 상태</option>
+          <option>활동중</option>
+          <option>휴면</option>
+        </select>
+      </div>
+
       <div id="memberList" class="list"></div>
     </section>
+
 
     <section id="more" class="screen">
       <div class="card">
         <div class="title">FC 우리풋살</div>
-        <div class="sub" style="margin-top:5px">회원 23명</div>
+        <div id="moreMemberCount" class="sub" style="margin-top:5px"></div>
       </div>
       <div class="card menu" style="padding:0">
         <button>구장 정보</button>
@@ -403,6 +429,39 @@
     </div>
   </div>
 
+
+  <div id="memberModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="memberModalTitle">
+      <div class="row">
+        <h3 id="memberModalTitle">회원 등록</h3>
+        <button id="closeMemberModal" class="secondary" type="button">닫기</button>
+      </div>
+      <form id="memberForm">
+        <input id="memberId" type="hidden">
+        <label>이름<input id="memberName" required placeholder="이름"></label>
+        <label>그룹
+          <select id="memberGroup" class="search" style="margin-top:5px">
+            <option>1그룹</option><option>2그룹</option><option>3그룹</option>
+          </select>
+        </label>
+        <label>권한
+          <select id="memberRole" class="search" style="margin-top:5px">
+            <option>회원</option><option>운영진</option><option>관리자</option>
+          </select>
+        </label>
+        <label>상태
+          <select id="memberStatus" class="search" style="margin-top:5px">
+            <option>활동중</option><option>휴면</option>
+          </select>
+        </label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+      <div id="memberDeleteWrap" style="display:none">
+        <button id="deleteMemberBtn" class="primary danger" type="button">회원 삭제</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="nav">
     <button class="nav-btn active" data-screen="home"><span class="ico">⌂</span>홈</button>
     <button class="nav-btn" data-screen="calendar"><span class="ico">▣</span>캘린더</button>
@@ -421,7 +480,14 @@ const state={
   matches:[
     {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
   ],
-  members:['김민수','이준호','박지훈','최영민','정우현','한지수']
+  members:[
+    {id:101,name:'김민수',group:'1그룹',role:'회원',status:'활동중'},
+    {id:102,name:'이준호',group:'2그룹',role:'회원',status:'활동중'},
+    {id:103,name:'박지훈',group:'3그룹',role:'회원',status:'활동중'},
+    {id:104,name:'최영민',group:'1그룹',role:'운영진',status:'활동중'},
+    {id:105,name:'정우현',group:'2그룹',role:'회원',status:'활동중'},
+    {id:106,name:'한지수',group:'3그룹',role:'회원',status:'활동중'}
+  ]
 };
 
 const STORAGE_KEY='jasnal_state_v1';
@@ -441,7 +507,11 @@ function loadState(){
     if(!raw)return;
     const saved=JSON.parse(raw);
     if(Array.isArray(saved.matches)) state.matches=saved.matches;
-    if(Array.isArray(saved.members)) state.members=saved.members;
+    if(Array.isArray(saved.members)){
+      state.members=saved.members.map((m,i)=>typeof m==='string'
+        ? {id:1000+i,name:m,group:'1그룹',role:'회원',status:'활동중'}
+        : m);
+    }
   }catch(e){}
 }
 
@@ -835,21 +905,116 @@ $('deleteMatchBtn').addEventListener('click',()=>{
   }
 });
 
-function renderMembers(filter=''){
-  const f=filter.trim().toLowerCase();
-  const arr=state.members.filter(n=>n.toLowerCase().includes(f));
-  $('memberList').innerHTML=arr.length
-    ? arr.map(n=>`<div class="list-item" style="font-weight:800">${n}</div>`).join('')
-    : '<div class="sub">검색 결과가 없습니다.</div>';
+
+function renderMembers(){
+  const q=$('memberSearch').value.trim().toLowerCase();
+  const group=$('memberGroupFilter').value;
+  const status=$('memberStatusFilter').value;
+
+  const arr=state.members.filter(m=>{
+    const name=(m.name||'').toLowerCase();
+    return (!q || name.includes(q))
+      && (!group || m.group===group)
+      && (!status || m.status===status);
+  });
+
+  $('memberCount').textContent=`전체 ${state.members.length}명 · 표시 ${arr.length}명`;
+  if($('moreMemberCount')) $('moreMemberCount').textContent=`회원 ${state.members.length}명`;
+
+  $('memberList').innerHTML=arr.length ? arr.map(m=>`
+    <div class="list-item">
+      <div class="member-row">
+        <div>
+          <div style="font-weight:800;font-size:16px">${m.name}</div>
+          <div class="member-meta">
+            <span class="member-chip">${m.group}</span>
+            <span class="member-chip">${m.role}</span>
+            <span class="member-chip">${m.status}</span>
+          </div>
+        </div>
+      </div>
+      <div class="member-card-actions">
+        <button class="secondary edit-member" data-id="${m.id}" type="button">수정</button>
+      </div>
+    </div>`).join('')
+    : '<div class="card"><div class="sub">조건에 맞는 회원이 없습니다.</div></div>';
+
+  document.querySelectorAll('.edit-member').forEach(b=>{
+    b.addEventListener('click',()=>openMemberModal(Number(b.dataset.id)));
+  });
 }
-$('memberSearch').addEventListener('input',e=>renderMembers(e.target.value));
-$('addMember').addEventListener('click',()=>{
-  const name=prompt('회원 이름을 입력하세요.');
-  if(!name||!name.trim()) return;
-  state.members.push(name.trim());
-  saveState();
-  renderMembers($('memberSearch').value);
+
+function openMemberModal(id=null){
+  const editing=id!==null;
+  $('memberModalTitle').textContent=editing?'회원 수정':'회원 등록';
+  $('memberDeleteWrap').style.display=editing?'block':'none';
+
+  if(editing){
+    const m=state.members.find(x=>x.id===id);
+    if(!m)return;
+    $('memberId').value=m.id;
+    $('memberName').value=m.name||'';
+    $('memberGroup').value=m.group||'1그룹';
+    $('memberRole').value=m.role||'회원';
+    $('memberStatus').value=m.status||'활동중';
+  }else{
+    $('memberId').value='';
+    $('memberName').value='';
+    $('memberGroup').value='1그룹';
+    $('memberRole').value='회원';
+    $('memberStatus').value='활동중';
+  }
+
+  $('memberModal').classList.add('show');
+  $('memberModal').setAttribute('aria-hidden','false');
+}
+
+function closeMemberModal(){
+  $('memberModal').classList.remove('show');
+  $('memberModal').setAttribute('aria-hidden','true');
+}
+
+$('addMember').addEventListener('click',()=>openMemberModal());
+$('closeMemberModal').addEventListener('click',closeMemberModal);
+$('memberModal').addEventListener('click',e=>{
+  if(e.target===$('memberModal')) closeMemberModal();
 });
+
+$('memberForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const item={
+    id:$('memberId').value ? Number($('memberId').value) : Date.now(),
+    name:$('memberName').value.trim(),
+    group:$('memberGroup').value,
+    role:$('memberRole').value,
+    status:$('memberStatus').value
+  };
+  if(!item.name)return;
+
+  const idx=state.members.findIndex(x=>x.id===item.id);
+  if(idx>=0) state.members[idx]=item;
+  else state.members.push(item);
+
+  saveState();
+  closeMemberModal();
+  renderMembers();
+});
+
+$('deleteMemberBtn').addEventListener('click',()=>{
+  const id=Number($('memberId').value);
+  if(!id)return;
+  const m=state.members.find(x=>x.id===id);
+  if(m && confirm(`${m.name} 회원을 삭제할까요?`)){
+    state.members=state.members.filter(x=>x.id!==id);
+    saveState();
+    closeMemberModal();
+    renderMembers();
+  }
+});
+
+$('memberSearch').addEventListener('input',renderMembers);
+$('memberGroupFilter').addEventListener('change',renderMembers);
+$('memberStatusFilter').addEventListener('change',renderMembers);
 
 loadState();
 rebuildEventsFromMatches();

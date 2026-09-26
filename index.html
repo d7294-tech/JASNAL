@@ -264,6 +264,16 @@
     .notice-body{font-size:13px;line-height:1.55;margin-top:10px;white-space:pre-wrap}
     .notice-actions{display:flex;gap:8px;margin-top:10px}
     .notice-actions button{flex:1}
+    .dues-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+    .dues-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+    .dues-stat b{display:block;font-size:18px;margin-top:4px}
+    .dues-paid{color:#059669}.dues-unpaid{color:#dc2626}.dues-total{color:var(--green-dark)}
+    .dues-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .dues-status{font-size:11px;padding:4px 8px;border-radius:999px;font-weight:800}
+    .dues-status.paid{background:#ecfdf5;color:#047857}
+    .dues-status.unpaid{background:#fef2f2;color:#b91c1c}
+    .dues-actions{display:flex;gap:8px;margin-top:10px}
+    .dues-actions button{flex:1}
     @media (max-width:380px){
       .app{padding-left:10px;padding-right:10px}
       .day{min-height:76px;padding:3px}
@@ -433,7 +443,35 @@
 
     
     
-    <section id="notices" class="screen">
+    
+    <section id="dues" class="screen">
+      <div class="row" style="margin-bottom:12px">
+        <div>
+          <div class="title">회비 관리</div>
+          <div id="duesMonthLabel" class="sub" style="margin-top:4px"></div>
+        </div>
+        <button id="duesSettingsBtn" class="secondary" type="button">설정</button>
+      </div>
+
+      <div class="dues-summary">
+        <div class="dues-stat"><span class="sub">대상</span><b id="duesTargetCount" class="dues-total">0</b></div>
+        <div class="dues-stat"><span class="sub">납부</span><b id="duesPaidCount" class="dues-paid">0</b></div>
+        <div class="dues-stat"><span class="sub">미납</span><b id="duesUnpaidCount" class="dues-unpaid">0</b></div>
+      </div>
+
+      <div class="row" style="margin-bottom:10px">
+        <select id="duesMonthSelect" class="secondary" style="flex:1;min-height:44px"></select>
+        <select id="duesFilter" class="secondary" style="flex:1;min-height:44px">
+          <option value="">전체</option>
+          <option value="paid">납부</option>
+          <option value="unpaid">미납</option>
+        </select>
+      </div>
+
+      <div id="duesList" class="list"></div>
+    </section>
+
+<section id="notices" class="screen">
       <div class="row" style="margin-bottom:12px">
         <div>
           <div class="title">공지사항</div>
@@ -491,7 +529,7 @@
 
       <div class="card menu" style="padding:0;margin-top:12px">
         <button>구장 정보</button>
-        <button>회비 관리</button>
+        <button id="openDuesBtn" type="button">회비 관리</button>
         <button id="openNoticesBtn" type="button">공지사항</button>
         <button>설정</button>
       </div>
@@ -501,6 +539,25 @@
 
 
 
+
+
+  <div id="duesModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="duesModalTitle">
+      <div class="row">
+        <h3 id="duesModalTitle">회비 설정</h3>
+        <button id="closeDuesModal" class="secondary" type="button">닫기</button>
+      </div>
+      <form id="duesSettingsForm">
+        <label>월 회비
+          <input id="duesAmount" type="number" min="0" step="1000" value="30000" required>
+        </label>
+        <label>납부 기한
+          <input id="duesDueDay" type="number" min="1" max="31" value="10" required>
+        </label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+    </div>
+  </div>
 
   <div id="noticeModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noticeModalTitle">
@@ -628,6 +685,8 @@ const state={
   schedule:{},
   events:{},
   notices:[],
+  duesPayments:[],
+  duesSettings:{amount:30000,dueDay:10},
   matches:[
     {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
   ],
@@ -799,6 +858,8 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'votes'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'notices'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'dues_payments'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'club_settings'},scheduleRemoteReload)
     .subscribe();
 }
 
@@ -814,14 +875,18 @@ async function loadRemoteState(){
       {data:matches,error:me},
       {data:members,error:mbe},
       {data:votes,error:ve},
-      {data:notices,error:ne}
+      {data:notices,error:ne},
+      {data:duesPayments,error:de},
+      {data:clubSettings,error:cse}
     ] = await Promise.all([
       supabase.from('matches').select('*').order('match_date',{ascending:true}),
       supabase.from('members').select('*').order('name',{ascending:true}),
       supabase.from('votes').select('*'),
-      supabase.from('notices').select('*').order('created_at',{ascending:false})
+      supabase.from('notices').select('*').order('created_at',{ascending:false}),
+      supabase.from('dues_payments').select('*').order('month_key',{ascending:false}),
+      supabase.from('club_settings').select('*').eq('key','dues').maybeSingle()
     ]);
-    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;
+    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;
 
     const mine=currentUser?.id||deviceId();
     const memberNameByAuthId={};
@@ -872,12 +937,29 @@ async function loadRemoteState(){
       createdAt:n.created_at
     }));
 
+    state.duesPayments=(duesPayments||[]).map(d=>({
+      id:Number(d.id),
+      memberId:Number(d.member_id),
+      monthKey:d.month_key,
+      amount:Number(d.amount||0),
+      paid:!!d.paid,
+      paidAt:d.paid_at||null
+    }));
+
+    if(clubSettings?.value){
+      state.duesSettings={
+        amount:Number(clubSettings.value.amount||30000),
+        dueDay:Number(clubSettings.value.dueDay||10)
+      };
+    }
+
     saveState();
     rebuildEventsFromMatches();
     renderCalendar();
     renderMatches();
     renderMembers();
     renderNotices();
+    renderDues();
     refreshHome();
     applyRoleVisibility();
     setSyncStatus('Cloud 연결됨 · 최신 데이터',true);
@@ -951,12 +1033,37 @@ async function remoteDeleteNotice(id){
   if(error)throw error;
 }
 
+
+async function remoteUpsertDuesPayment(item){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('dues_payments').upsert({
+    id:item.id,
+    member_id:item.memberId,
+    month_key:item.monthKey,
+    amount:item.amount,
+    paid:item.paid,
+    paid_at:item.paid ? (item.paidAt||new Date().toISOString()) : null
+  });
+  if(error)throw error;
+}
+
+async function remoteSaveDuesSettings(settings){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('club_settings').upsert({
+    key:'dues',
+    value:settings
+  });
+  if(error)throw error;
+}
+
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       matches: state.matches,
       members: state.members,
-      notices: state.notices
+      notices: state.notices,
+      duesPayments: state.duesPayments,
+      duesSettings: state.duesSettings
     }));
   }catch(e){}
 }
@@ -973,6 +1080,8 @@ function loadState(){
         : m);
     }
     if(Array.isArray(saved.notices)) state.notices=saved.notices;
+    if(Array.isArray(saved.duesPayments)) state.duesPayments=saved.duesPayments;
+    if(saved.duesSettings) state.duesSettings=saved.duesSettings;
   }catch(e){}
 }
 
@@ -1085,6 +1194,140 @@ document.querySelectorAll('.vote').forEach(btn=>{
   });
 });
 
+
+
+function currentMonthKey(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function makeMonthOptions(){
+  const sel=$('duesMonthSelect');
+  if(!sel)return;
+  const now=new Date();
+  const values=[];
+  for(let i=-12;i<=3;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    values.push({key,label:`${d.getFullYear()}년 ${d.getMonth()+1}월`});
+  }
+  sel.innerHTML=values.reverse().map(x=>`<option value="${x.key}">${x.label}</option>`).join('');
+  if(values.some(x=>x.key===currentMonthKey())) sel.value=currentMonthKey();
+}
+
+function ensureDuesRows(monthKey){
+  const activeMembers=state.members.filter(m=>m.status==='활동중');
+  for(const m of activeMembers){
+    if(!state.duesPayments.some(d=>d.memberId===m.id && d.monthKey===monthKey)){
+      state.duesPayments.push({
+        id:Number(`${monthKey.replace('-','')}${String(m.id).slice(-6)}`),
+        memberId:m.id,
+        monthKey,
+        amount:Number(state.duesSettings.amount||0),
+        paid:false,
+        paidAt:null
+      });
+    }
+  }
+}
+
+function renderDues(){
+  if(!$('duesList'))return;
+  if(!$('duesMonthSelect').options.length) makeMonthOptions();
+  const monthKey=$('duesMonthSelect').value||currentMonthKey();
+  ensureDuesRows(monthKey);
+
+  const filter=$('duesFilter').value;
+  const all=state.duesPayments.filter(d=>d.monthKey===monthKey)
+    .map(d=>({...d,member:state.members.find(m=>m.id===d.memberId)}))
+    .filter(d=>d.member && d.member.status==='활동중');
+
+  let rows=all;
+  if(filter==='paid') rows=all.filter(d=>d.paid);
+  if(filter==='unpaid') rows=all.filter(d=>!d.paid);
+
+  const [y,m]=monthKey.split('-');
+  $('duesMonthLabel').textContent=`${y}년 ${Number(m)}월 · 월 회비 ${Number(state.duesSettings.amount||0).toLocaleString()}원`;
+  $('duesTargetCount').textContent=all.length;
+  $('duesPaidCount').textContent=all.filter(d=>d.paid).length;
+  $('duesUnpaidCount').textContent=all.filter(d=>!d.paid).length;
+
+  const manager=isManager();
+  const visibleRows=manager ? rows : rows.filter(d=>d.member.authUserId===currentUser?.id);
+
+  $('duesList').innerHTML=visibleRows.length ? visibleRows.map(d=>`
+    <div class="list-item">
+      <div class="dues-row">
+        <div>
+          <div style="font-weight:800">${d.member.name}</div>
+          <div class="sub" style="margin-top:4px">${d.member.group} · ${Number(d.amount||0).toLocaleString()}원</div>
+        </div>
+        <span class="dues-status ${d.paid?'paid':'unpaid'}">${d.paid?'납부완료':'미납'}</span>
+      </div>
+      ${d.paidAt?`<div class="sub" style="margin-top:6px">납부일: ${new Date(d.paidAt).toLocaleDateString('ko-KR')}</div>`:''}
+      ${manager?`
+        <div class="dues-actions">
+          <button class="secondary toggle-dues" data-id="${d.id}" type="button">${d.paid?'미납으로 변경':'납부 처리'}</button>
+        </div>`:''}
+    </div>`).join('') : '<div class="card"><div class="sub">표시할 회비 내역이 없습니다.</div></div>';
+
+  document.querySelectorAll('.toggle-dues').forEach(b=>b.addEventListener('click',async ()=>{
+    if(!isManager())return;
+    const d=state.duesPayments.find(x=>x.id===Number(b.dataset.id));
+    if(!d)return;
+    d.paid=!d.paid;
+    d.paidAt=d.paid?new Date().toISOString():null;
+    saveState();
+    try{ await remoteUpsertDuesPayment(d); }catch(err){ setSyncStatus('회비 동기화 실패: '+err.message,false); }
+    renderDues();
+  }));
+
+  $('duesSettingsBtn').style.display=isAdmin()?'inline-block':'none';
+}
+
+$('duesMonthSelect').addEventListener('change',renderDues);
+$('duesFilter').addEventListener('change',renderDues);
+
+$('openDuesBtn').addEventListener('click',()=>{
+  showScreen('dues');
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
+  if(moreBtn)moreBtn.classList.add('active');
+  renderDues();
+});
+
+$('duesSettingsBtn').addEventListener('click',()=>{
+  if(!isAdmin()){ alert('관리자만 회비 설정을 변경할 수 있습니다.'); return; }
+  $('duesAmount').value=state.duesSettings.amount||30000;
+  $('duesDueDay').value=state.duesSettings.dueDay||10;
+  $('duesModal').classList.add('show');
+  $('duesModal').setAttribute('aria-hidden','false');
+});
+
+$('closeDuesModal').addEventListener('click',()=>{
+  $('duesModal').classList.remove('show');
+  $('duesModal').setAttribute('aria-hidden','true');
+});
+$('duesModal').addEventListener('click',e=>{
+  if(e.target===$('duesModal')){
+    $('duesModal').classList.remove('show');
+    $('duesModal').setAttribute('aria-hidden','true');
+  }
+});
+
+$('duesSettingsForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(!isAdmin())return;
+  state.duesSettings={
+    amount:Math.max(0,Number($('duesAmount').value||0)),
+    dueDay:Math.min(31,Math.max(1,Number($('duesDueDay').value||10)))
+  };
+  saveState();
+  try{ await remoteSaveDuesSettings(state.duesSettings); }catch(err){ setSyncStatus('회비 설정 동기화 실패: '+err.message,false); }
+  $('duesModal').classList.remove('show');
+  $('duesModal').setAttribute('aria-hidden','true');
+  renderDues();
+});
 
 function formatNoticeDate(ts){
   if(!ts)return '';
@@ -1867,6 +2110,8 @@ renderCalendar();
 renderMatches();
 renderMembers();
 renderNotices();
+makeMonthOptions();
+renderDues();
 refreshHome();
 initSupabase();
 </script>

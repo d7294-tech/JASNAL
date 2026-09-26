@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0b5d42" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>FC 우리풋살</title>
   <style>
     :root{
@@ -380,41 +383,64 @@ const state={
 };
 
 const pad=n=>String(n).padStart(2,'0');
-const october2026 = {
-  1:['오전','오후','휴무'], 2:['오전','휴무','오후'], 3:['오전','휴무','오후'],
-  4:['휴무','오전','오후'], 5:['휴무','오전','오후'], 6:['오후','오전','휴무'],
-  7:['오후','오전','휴무'], 8:['오후','휴무','오전'], 9:['오후','휴무','오전'],
-  10:['휴무','오후','오전'], 11:['휴무','오후','오전'], 12:['오전','오후','휴무'],
-  13:['오전','오후','휴무'], 14:['오전','휴무','오후'], 15:['오전','휴무','오후'],
-  16:['휴무','오전','오후'], 17:['휴무','오전','오후'], 18:['오후','오전','휴무'],
-  19:['오후','오전','휴무'], 20:['오후','휴무','오전'], 21:['오후','휴무','오전'],
-  22:['휴무','오후','오전'], 23:['휴무','오후','오전'], 24:['오전','오후','휴무'],
-  25:['오전','오후','휴무'], 26:['오전','휴무','오후'], 27:['오전','휴무','오후'],
-  28:['휴무','오전','오후'], 29:['휴무','오전','오후'], 30:['오후','오전','휴무'],
-  31:['오후','오전','휴무']
-};
+const october2026 = [
+  null,
+  ['오전','오후','휴무'], // 1
+  ['오전','휴무','오후'], // 2
+  ['오전','휴무','오후'], // 3
+  ['휴무','오전','오후'], // 4
+  ['휴무','오전','오후'], // 5
+  ['오후','오전','휴무'], // 6
+  ['오후','오전','휴무'], // 7
+  ['오후','휴무','오전'], // 8
+  ['오후','휴무','오전'], // 9
+  ['휴무','오후','오전'], // 10
+  ['휴무','오후','오전'], // 11
+  ['오전','오후','휴무'], // 12
+  ['오전','오후','휴무'], // 13
+  ['오전','휴무','오후'], // 14
+  ['오전','휴무','오후'], // 15
+  ['휴무','오전','오후'], // 16
+  ['휴무','오전','오후'], // 17
+  ['오후','오전','휴무'], // 18
+  ['오후','오전','휴무'], // 19
+  ['오후','휴무','오전'], // 20
+  ['오후','휴무','오전'], // 21
+  ['휴무','오후','오전'], // 22
+  ['휴무','오후','오전'], // 23
+  ['오전','오후','휴무'], // 24
+  ['오전','오후','휴무'], // 25
+  ['오전','휴무','오후'], // 26
+  ['오전','휴무','오후'], // 27
+  ['휴무','오전','오후'], // 28
+  ['휴무','오전','오후'], // 29
+  ['오후','오전','휴무'], // 30
+  ['오후','오전','휴무']  // 31
+];
 
+// From 2026-11-01 onward only, continue the cycle from the exact 10/31 state.
+// 1G: 10/30~31 afternoon -> 11/1~2 afternoon -> 11/3~4 off
+// 2G: 10/28~31 morning   -> 11/1~2 off       -> 11/3~6 afternoon
+// 3G: 10/30~31 off       -> 11/1~4 morning
 const cycle = ['오전','오전','오전','오전','휴무','휴무','오후','오후','오후','오후','휴무','휴무'];
-const continuationBase = Date.UTC(2026,10,1); // 2026-11-01
-// 11/1 continuation from the supplied October table:
-// 1G = 오후(3rd of 4), 2G = 휴무(1st of 2), 3G = 오전(1st of 4)
+const continuationBase = Date.UTC(2026,10,1);
 const nov1CycleIndexes = [8,4,0];
 
-function autoShiftForDate(k, groupIndex){
+function getScheduleForDate(k){
   const [y,m,d] = k.split('-').map(Number);
 
+  // October 2026: NEVER calculate. Use the supplied table exactly.
   if(y === 2026 && m === 10){
-    return october2026[d][groupIndex];
+    return october2026[d].slice();
   }
 
+  // November 2026 onward: calculate as continuation of 10/31.
   const current = Date.UTC(y,m-1,d);
   const diffDays = Math.floor((current - continuationBase) / 86400000);
-  const idx = ((nov1CycleIndexes[groupIndex] + diffDays) % cycle.length + cycle.length) % cycle.length;
-  return cycle[idx];
-}
-
-function getScheduleForDate(k){
-  return [0,1,2].map(i=>autoShiftForDate(k,i));
+  return nov1CycleIndexes.map(baseIdx => {
+    const idx = ((baseIdx + diffDays) % cycle.length + cycle.length) % cycle.length;
+    return cycle[idx];
+  });
 }
 
 const dateKey=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;

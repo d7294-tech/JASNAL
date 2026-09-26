@@ -292,6 +292,8 @@
     .auth-user{font-size:13px;color:var(--muted);margin-top:4px}
     .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
     .profile-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:var(--green-soft);color:var(--green-dark);font-size:11px;font-weight:800;margin-top:6px}
+    .pending-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#fff7ed;color:#c2410c;font-size:11px;font-weight:800;margin-top:6px}
+    .approval-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
     .match-actions button{flex:1}
   </style>
 </head>
@@ -392,10 +394,15 @@
         <select id="memberStatusFilter" class="secondary" style="flex:1;min-height:44px">
           <option value="">전체 상태</option>
           <option>활동중</option>
+          <option>승인대기</option>
           <option>휴면</option>
         </select>
       </div>
 
+      <div id="approvalQueue" class="card" style="display:none;margin-bottom:12px">
+        <div class="title" style="font-size:16px">가입 승인 대기</div>
+        <div id="approvalList" class="list" style="margin-top:10px"></div>
+      </div>
       <div id="memberList" class="list"></div>
     </section>
 
@@ -501,7 +508,7 @@
         </label>
         <label>상태
           <select id="memberStatus" class="search" style="margin-top:5px">
-            <option>활동중</option><option>휴면</option>
+            <option>활동중</option><option>승인대기</option><option>휴면</option>
           </select>
         </label>
         <button class="primary" type="submit">저장</button>
@@ -552,6 +559,16 @@ let remoteReady=false;
 let remoteReloadTimer=null;
 let currentUser=null;
 let currentMember=null;
+function isManager(){
+  return currentMember && (currentMember.role==='운영진' || currentMember.role==='관리자') && currentMember.status==='활동중';
+}
+function isAdmin(){
+  return currentMember && currentMember.role==='관리자' && currentMember.status==='활동중';
+}
+function isApproved(){
+  return currentMember && currentMember.status==='활동중';
+}
+
 
 
 function deviceId(){
@@ -640,6 +657,18 @@ async function loadMyMemberProfile(){
   return currentMember;
 }
 
+
+function applyRoleVisibility(){
+  const manager=isManager();
+  const admin=isAdmin();
+  const newMatch=$('newMatchBtn'), delMatch=$('deleteModeBtn'), addMem=$('addMember');
+  if(newMatch)newMatch.style.display=manager?'inline-block':'none';
+  if(delMatch)delMatch.style.display=manager?'inline-block':'none';
+  if(addMem)addMem.style.display=manager?'inline-block':'none';
+  const cloud=document.querySelector('.sync-box');
+  if(cloud)cloud.style.display=admin?'block':'none';
+}
+
 function renderAuthState(){
   const out=$('authSignedOut'), inn=$('authSignedIn'), status=$('authStatus');
   if(!out||!inn)return;
@@ -647,12 +676,17 @@ function renderAuthState(){
     out.style.display='none'; inn.style.display='block';
     $('authEmailView').textContent=currentUser.email||'로그인됨';
     $('authProfileView').innerHTML=currentMember
-      ? `<div style="margin-top:8px;font-weight:800">${currentMember.name}</div><span class="profile-badge">${currentMember.group} · ${currentMember.role}</span>`
+      ? `<div style="margin-top:8px;font-weight:800">${currentMember.name}</div>
+         <span class="${currentMember.status==='승인대기'?'pending-badge':'profile-badge'}">
+           ${currentMember.group} · ${currentMember.role} · ${currentMember.status}
+         </span>`
       : `<div class="sub" style="margin-top:8px">회원 정보를 등록해주세요.</div>`;
     if(status) status.textContent='로그인됨';
+    applyRoleVisibility();
   }else{
     out.style.display='block'; inn.style.display='none';
     if(status) status.textContent=remoteReady?'로그인이 필요합니다.':'';
+    applyRoleVisibility();
   }
   applyRoleVisibility();
 }
@@ -735,6 +769,7 @@ async function loadRemoteState(){
     renderMatches();
     renderMembers();
     refreshHome();
+    applyRoleVisibility();
     setSyncStatus('Cloud 연결됨 · 최신 데이터',true);
   }catch(err){
     console.error(err);
@@ -885,6 +920,7 @@ document.querySelectorAll('.vote').forEach(btn=>{
     const next=getNextMatch();
     if(!next)return;
     if(remoteReady && !currentUser){ alert('로그인 후 투표할 수 있습니다.'); return; }
+    if(remoteReady && !isApproved()){ alert('가입 승인 후 투표할 수 있습니다.'); return; }
     if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
     const map={참석:'yes',불참:'no',미정:'maybe'};
     const vote=map[btn.dataset.vote];
@@ -1071,7 +1107,7 @@ function renderMatches(){
       </div>
       <div class="attendance-note">${m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.'}</div>
       <div class="match-actions">
-        <button class="secondary edit-match" data-id="${m.id}">수정</button>
+        ${isManager()?`<button class="secondary edit-match" data-id="${m.id}">수정</button>`:''}
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
       </div>
       <button class="delete-pick" data-id="${m.id}" type="button" hidden>이 경기 삭제</button>
@@ -1083,6 +1119,7 @@ function renderMatches(){
     const id=Number(b.dataset.id);
     const vote=b.dataset.vote;
     if(remoteReady && !currentUser){ alert('로그인 후 투표할 수 있습니다.'); return; }
+    if(remoteReady && !isApproved()){ alert('가입 승인 후 투표할 수 있습니다.'); return; }
     const m=state.matches.find(x=>x.id===id);
     if(!m)return;
     if(!m.attendance)m.attendance={yes:0,no:0,maybe:0,myVote:null};
@@ -1153,6 +1190,7 @@ function applyDeleteMode(){
   $('deleteModeBtn').textContent=deleteMode?'취소':'삭제';
 }
 $('deleteModeBtn').addEventListener('click',()=>{
+  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
   deleteMode=!deleteMode;
   applyDeleteMode();
 });
@@ -1241,11 +1279,53 @@ function renderMembers(){
           </div>
         </div>
       </div>
+      ${(isManager() || m.authUserId===currentUser?.id) ? `
       <div class="member-card-actions">
         <button class="secondary edit-member" data-id="${m.id}" type="button">수정</button>
-      </div>
+      </div>` : ''}
     </div>`).join('')
     : '<div class="card"><div class="sub">조건에 맞는 회원이 없습니다.</div></div>';
+
+
+  const pending=state.members.filter(m=>m.status==='승인대기');
+  const queue=$('approvalQueue');
+  if(queue){
+    queue.style.display=isManager() && pending.length ? 'block' : 'none';
+    $('approvalList').innerHTML=pending.map(m=>`
+      <div class="list-item">
+        <div style="font-weight:800">${m.name}</div>
+        <div class="member-meta">
+          <span class="member-chip">${m.group}</span>
+          <span class="member-chip">가입대기</span>
+        </div>
+        <div class="approval-actions">
+          <button class="primary approve-member" data-id="${m.id}" type="button" style="margin-top:0">승인</button>
+          <button class="secondary reject-member" data-id="${m.id}" type="button">거절</button>
+        </div>
+      </div>`).join('');
+  }
+
+  document.querySelectorAll('.approve-member').forEach(b=>b.addEventListener('click',async ()=>{
+    const m=state.members.find(x=>x.id===Number(b.dataset.id));
+    if(!m || !isManager())return;
+    m.status='활동중';
+    m.role='회원';
+    saveState();
+    try{ await remoteUpsertMember(m); }catch(err){ setSyncStatus('승인 동기화 실패: '+err.message,false); }
+    renderMembers();
+  }));
+
+  document.querySelectorAll('.reject-member').forEach(b=>b.addEventListener('click',async ()=>{
+    const id=Number(b.dataset.id);
+    const m=state.members.find(x=>x.id===id);
+    if(!m || !isManager())return;
+    if(confirm(`${m.name} 가입 신청을 거절할까요?`)){
+      state.members=state.members.filter(x=>x.id!==id);
+      saveState();
+      try{ await remoteDeleteMember(id); }catch(err){ setSyncStatus('거절 동기화 실패: '+err.message,false); }
+      renderMembers();
+    }
+  }));
 
   document.querySelectorAll('.edit-member').forEach(b=>{
     b.addEventListener('click',()=>openMemberModal(Number(b.dataset.id)));
@@ -1256,7 +1336,12 @@ function renderMembers(){
 function openMemberModal(id=null){
   const editing=id!==null;
   $('memberModalTitle').textContent=editing?'회원 수정':'회원 등록';
-  $('memberDeleteWrap').style.display=editing?'block':'none';
+  $('memberDeleteWrap').style.display=(editing && isManager())?'block':'none';
+  const roleField=$('memberRole');
+  const statusField=$('memberStatus');
+  const managerMode=isManager();
+  roleField.disabled=!managerMode;
+  statusField.disabled=!managerMode;
 
   if(editing){
     const m=state.members.find(x=>x.id===id);
@@ -1273,7 +1358,7 @@ function openMemberModal(id=null){
     $('memberName').value='';
     $('memberGroup').value='1그룹';
     $('memberRole').value='회원';
-    $('memberStatus').value='활동중';
+    $('memberStatus').value=currentUser ? '승인대기' : '활동중';
   }
 
   $('memberModal').classList.add('show');
@@ -1293,12 +1378,15 @@ $('memberModal').addEventListener('click',e=>{
 
 $('memberForm').addEventListener('submit',async e=>{
   e.preventDefault();
+  const editingId=$('memberId').value ? Number($('memberId').value) : null;
+  const existing=editingId ? state.members.find(x=>x.id===editingId) : null;
+  const selfRegistration=!isManager() && (!existing || existing.authUserId===currentUser?.id);
   const item={
-    id:$('memberId').value ? Number($('memberId').value) : Date.now(),
+    id:editingId || Date.now(),
     name:$('memberName').value.trim(),
     group:$('memberGroup').value,
-    role:$('memberRole').value,
-    status:$('memberStatus').value,
+    role:selfRegistration ? (existing?.role||'회원') : $('memberRole').value,
+    status:selfRegistration ? (existing?.status||'승인대기') : $('memberStatus').value,
     authUserId:$('memberAuthUserId').value||null
   };
   if(!item.name)return;

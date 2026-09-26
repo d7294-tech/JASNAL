@@ -412,7 +412,7 @@
           <div class="title">회원</div>
           <div id="memberCount" class="sub" style="margin-top:4px"></div>
         </div>
-        <button id="addMember" class="secondary">+ 회원</button>
+
       </div>
 
       <input id="memberSearch" class="search" placeholder="이름 검색">
@@ -456,11 +456,6 @@
 
         <div id="memberDuesList" class="list"></div>
       </div>
-
-<div id="approvalQueue" class="card" style="display:none;margin-bottom:12px">
-        <div class="title" style="font-size:16px">가입 승인 대기</div>
-        <div id="approvalList" class="list" style="margin-top:10px"></div>
-      </div>
       <div id="memberList" class="list"></div>
     </section>
 
@@ -474,7 +469,10 @@
           <div class="title">회원 관리</div>
           <div id="duesMonthLabel" class="sub" style="margin-top:4px"></div>
         </div>
-        <button id="duesSettingsBtn" class="secondary" type="button">설정</button>
+        <div style="display:flex;gap:8px">
+          <button id="addMember" class="secondary" type="button">+ 회원</button>
+          <button id="duesSettingsBtn" class="secondary" type="button">설정</button>
+        </div>
       </div>
 
       <div class="dues-summary">
@@ -492,6 +490,10 @@
         </select>
       </div>
 
+      <div id="approvalQueue" class="card" style="display:none;margin-bottom:12px">
+        <div class="title" style="font-size:16px">가입 승인 대기</div>
+        <div id="approvalList" class="list" style="margin-top:10px"></div>
+      </div>
       <div id="duesList" class="list"></div>
     </section>
 
@@ -1327,42 +1329,75 @@ function ensureDuesRows(monthKey){
 function renderDues(){
   if(!$('duesList'))return;
   if(!$('duesMonthSelect').options.length) makeMonthOptions();
+
   const monthKey=$('duesMonthSelect').value||currentMonthKey();
   ensureDuesRows(monthKey);
-
   const filter=$('duesFilter').value;
-  const all=state.duesPayments.filter(d=>d.monthKey===monthKey)
+
+  const activeDues=state.duesPayments
+    .filter(d=>d.monthKey===monthKey)
     .map(d=>({...d,member:state.members.find(m=>m.id===d.memberId)}))
     .filter(d=>d.member && d.member.status==='활동중');
 
-  let rows=all;
-  if(filter==='paid') rows=all.filter(d=>d.paid);
-  if(filter==='unpaid') rows=all.filter(d=>!d.paid);
-
   const [y,m]=monthKey.split('-');
   $('duesMonthLabel').textContent=`${y}년 ${Number(m)}월 · 월 회비 ${Number(state.duesSettings.amount||0).toLocaleString()}원`;
-  $('duesTargetCount').textContent=all.length;
-  $('duesPaidCount').textContent=all.filter(d=>d.paid).length;
-  $('duesUnpaidCount').textContent=all.filter(d=>!d.paid).length;
+  $('duesTargetCount').textContent=activeDues.length;
+  $('duesPaidCount').textContent=activeDues.filter(d=>d.paid).length;
+  $('duesUnpaidCount').textContent=activeDues.filter(d=>!d.paid).length;
 
-  const manager=isManager();
-  const visibleRows=rows;
+  let members=[...state.members].filter(m=>m.status!=='승인대기');
 
-  $('duesList').innerHTML=visibleRows.length ? visibleRows.map(d=>`
-    <div class="list-item">
-      <div class="dues-row">
-        <div>
-          <div style="font-weight:800">${d.member.name}</div>
-          <div class="sub" style="margin-top:4px">${d.member.group} · ${Number(d.amount||0).toLocaleString()}원</div>
+  if(filter==='paid'){
+    const ids=new Set(activeDues.filter(d=>d.paid).map(d=>d.memberId));
+    members=members.filter(m=>ids.has(m.id));
+  }else if(filter==='unpaid'){
+    const ids=new Set(activeDues.filter(d=>!d.paid).map(d=>d.memberId));
+    members=members.filter(m=>ids.has(m.id));
+  }
+
+  members.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+
+  $('duesList').innerHTML=members.length ? members.map(member=>{
+    const due=activeDues.find(d=>d.memberId===member.id);
+    const isActive=member.status==='활동중';
+
+    return `
+      <div class="list-item">
+        <div class="dues-row">
+          <div>
+            <div style="font-weight:800">${member.name}</div>
+            <div class="member-meta">
+              <span class="member-chip">${member.group}</span>
+              <span class="member-chip">${member.role}</span>
+              <span class="member-chip">${member.status}</span>
+            </div>
+            ${isActive
+              ? `<div class="sub" style="margin-top:7px">${Number(due?.amount||state.duesSettings.amount||0).toLocaleString()}원</div>`
+              : `<div class="sub" style="margin-top:7px">회비 대상 제외</div>`}
+          </div>
+
+          ${isActive
+            ? `<span class="dues-status ${due?.paid?'paid':'unpaid'}">${due?.paid?'납부완료':'미납'}</span>`
+            : `<span class="dues-status">회비 제외</span>`}
         </div>
-        <span class="dues-status ${d.paid?'paid':'unpaid'}">${d.paid?'납부완료':'미납'}</span>
-      </div>
-      ${d.paidAt?`<div class="sub" style="margin-top:6px">납부일: ${new Date(d.paidAt).toLocaleDateString('ko-KR')}</div>`:''}
-      ${manager?`
+
+        ${due?.paidAt
+          ? `<div class="sub" style="margin-top:6px">납부일: ${new Date(due.paidAt).toLocaleDateString('ko-KR')}</div>`
+          : ''}
+
         <div class="dues-actions">
-          <button class="secondary toggle-dues" data-id="${d.id}" type="button">${d.paid?'미납으로 변경':'납부 처리'}</button>
-        </div>`:''}
-    </div>`).join('') : '<div class="card"><div class="sub">표시할 회비 내역이 없습니다.</div></div>';
+          <button class="secondary edit-managed-member" data-id="${member.id}" type="button">수정</button>
+          ${isActive
+            ? `<button class="secondary toggle-dues" data-id="${due?.id||''}" type="button">${due?.paid?'미납으로 변경':'납부 처리'}</button>`
+            : ''}
+        </div>
+      </div>`;
+  }).join('') : '<div class="card"><div class="sub">표시할 회원이 없습니다.</div></div>';
+
+  document.querySelectorAll('.edit-managed-member').forEach(b=>b.addEventListener('click',()=>{
+    if(!isManager())return;
+    openMemberModal(Number(b.dataset.id));
+  }));
 
   document.querySelectorAll('.toggle-dues').forEach(b=>b.addEventListener('click',async ()=>{
     if(!isManager())return;
@@ -1371,12 +1406,17 @@ function renderDues(){
     d.paid=!d.paid;
     d.paidAt=d.paid?new Date().toISOString():null;
     saveState();
-    try{ await remoteUpsertDuesPayment(d); }catch(err){ setSyncStatus('회비 동기화 실패: '+err.message,false); }
+    try{
+      await remoteUpsertDuesPayment(d);
+    }catch(err){
+      setSyncStatus('회비 동기화 실패: '+err.message,false);
+    }
     renderDues();
     renderMemberDuesSummary();
   }));
 
   $('duesSettingsBtn').style.display=isAdmin()?'inline-block':'none';
+  if($('addMember')) $('addMember').style.display=isManager()?'inline-block':'none';
 }
 
 $('duesMonthSelect').addEventListener('change',renderDues);
@@ -1990,10 +2030,6 @@ function renderMembers(){
           </div>
         </div>
       </div>
-      ${(isManager() || m.authUserId===currentUser?.id) ? `
-      <div class="member-card-actions">
-        <button class="secondary edit-member" data-id="${m.id}" type="button">수정</button>
-      </div>` : ''}
     </div>`).join('')
     : '<div class="card"><div class="sub">조건에 맞는 회원이 없습니다.</div></div>';
 
@@ -2037,10 +2073,6 @@ function renderMembers(){
       renderMembers();
     }
   }));
-
-  document.querySelectorAll('.edit-member').forEach(b=>{
-    b.addEventListener('click',()=>openMemberModal(Number(b.dataset.id)));
-  });
   applyRoleVisibility();
 }
 
@@ -2118,6 +2150,7 @@ $('memberForm').addEventListener('submit',async e=>{
   }
   closeMemberModal();
   renderMembers();
+  renderDues();
   renderMemberDuesSummary();
 });
 
@@ -2133,6 +2166,8 @@ $('deleteMemberBtn').addEventListener('click',async ()=>{
     }
     closeMemberModal();
     renderMembers();
+    renderDues();
+    renderMemberDuesSummary();
   }
 });
 

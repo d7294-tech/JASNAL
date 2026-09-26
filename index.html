@@ -658,16 +658,7 @@ async function loadMyMemberProfile(){
 }
 
 
-function applyRoleVisibility(){
-  const manager=isManager();
-  const admin=isAdmin();
-  const newMatch=$('newMatchBtn'), delMatch=$('deleteModeBtn'), addMem=$('addMember');
-  if(newMatch)newMatch.style.display=manager?'inline-block':'none';
-  if(delMatch)delMatch.style.display=manager?'inline-block':'none';
-  if(addMem)addMem.style.display=manager?'inline-block':'none';
-  const cloud=document.querySelector('.sync-box');
-  if(cloud)cloud.style.display=admin?'block':'none';
-}
+
 
 function renderAuthState(){
   const out=$('authSignedOut'), inn=$('authSignedIn'), status=$('authStatus');
@@ -682,17 +673,16 @@ function renderAuthState(){
          </span>`
       : `<div class="sub" style="margin-top:8px">회원 정보를 등록해주세요.</div>`;
     if(status) status.textContent='로그인됨';
-    applyRoleVisibility();
   }else{
     out.style.display='block'; inn.style.display='none';
     if(status) status.textContent=remoteReady?'로그인이 필요합니다.':'';
-    applyRoleVisibility();
   }
   applyRoleVisibility();
 }
 
 function applyRoleVisibility(){
-  const role=currentMember?.role||'회원';
+  const approved=currentMember?.status==='활동중';
+  const role=approved ? (currentMember?.role||'회원') : '회원';
   const isAdmin=role==='관리자';
   const isStaff=isAdmin || role==='운영진';
 

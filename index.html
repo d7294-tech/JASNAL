@@ -276,6 +276,10 @@
     .match-actions{display:flex;gap:8px;margin-top:10px}
     .delete-pick{display:none;width:100%;margin-top:10px;border:1px solid #7f1d1d;background:transparent;color:#f87171;border-radius:12px;padding:10px;font-weight:800}
     .delete-mode .delete-pick{display:block}
+    .attendance-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+    .attendance-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 4px;font-size:12px;font-weight:800}
+    .attendance-btn.active{background:var(--green-soft);border-color:var(--green);color:var(--green-dark)}
+    .attendance-note{font-size:11px;color:var(--muted);margin-top:7px}
     .match-actions button{flex:1}
   </style>
 </head>
@@ -415,7 +419,7 @@ const state={
   schedule:{},
   events:{},
   matches:[
-    {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:''}
+    {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
   ],
   members:['김민수','이준호','박지훈','최영민','정우현','한지수']
 };
@@ -493,9 +497,23 @@ document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=
 
 document.querySelectorAll('.vote').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    document.querySelectorAll('.vote').forEach(x=>x.classList.remove('active'));
-    btn.classList.add('active');
-    $('voteMsg').textContent=`${btn.dataset.vote}으로 선택했습니다.`;
+    const next=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0];
+    if(!next)return;
+    if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
+    const map={참석:'yes',불참:'no',미정:'maybe'};
+    const vote=map[btn.dataset.vote];
+    const prev=next.attendance.myVote;
+    if(prev===vote){
+      if(next.attendance[vote]>0)next.attendance[vote]--;
+      next.attendance.myVote=null;
+    }else{
+      if(prev && next.attendance[prev]>0)next.attendance[prev]--;
+      next.attendance[vote]++;
+      next.attendance.myVote=vote;
+    }
+    document.querySelectorAll('.vote').forEach(x=>x.classList.toggle('active',next.attendance.myVote===map[x.dataset.vote]));
+    $('voteMsg').textContent=next.attendance.myVote?`${btn.dataset.vote}으로 선택했습니다.`:'선택을 취소했습니다.';
+    renderMatches();
   });
 });
 
@@ -588,9 +606,22 @@ function formatKoreanDate(dateStr){
   return `${m}월 ${d}일 (${dow})`;
 }
 
+function refreshHomeAttendance(){
+  const next=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0];
+  if(!next)return;
+  if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
+  const votes=document.querySelectorAll('.vote');
+  const vals=[next.attendance.yes||0,next.attendance.no||0,next.attendance.maybe||0];
+  votes.forEach((b,i)=>{
+    const strong=b.querySelector('strong');
+    if(strong)strong.textContent=vals[i];
+  });
+}
+
 function renderMatches(){
   rebuildEventsFromMatches();
   renderCalendar();
+  refreshHomeAttendance();
   const sorted=[...state.matches].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
   $('matchList').innerHTML=sorted.length ? sorted.map(m=>`
     <div class="list-item">
@@ -603,6 +634,12 @@ function renderMatches(){
         </div>
         <span class="pill">경기</span>
       </div>
+      <div class="attendance-grid">
+        <button class="attendance-btn ${m.attendance?.myVote==='yes'?'active':''}" data-id="${m.id}" data-vote="yes" type="button">참석<br>${m.attendance?.yes||0}</button>
+        <button class="attendance-btn ${m.attendance?.myVote==='no'?'active':''}" data-id="${m.id}" data-vote="no" type="button">불참<br>${m.attendance?.no||0}</button>
+        <button class="attendance-btn ${m.attendance?.myVote==='maybe'?'active':''}" data-id="${m.id}" data-vote="maybe" type="button">미정<br>${m.attendance?.maybe||0}</button>
+      </div>
+      <div class="attendance-note">${m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.'}</div>
       <div class="match-actions">
         <button class="secondary edit-match" data-id="${m.id}">수정</button>
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
@@ -612,6 +649,24 @@ function renderMatches(){
     : '<div class="card"><div class="sub">등록된 경기가 없습니다.</div></div>';
 
   document.querySelectorAll('.edit-match').forEach(b=>b.addEventListener('click',()=>openMatchModal(Number(b.dataset.id))));
+  document.querySelectorAll('.attendance-btn').forEach(b=>b.addEventListener('click',()=>{
+    const id=Number(b.dataset.id);
+    const vote=b.dataset.vote;
+    const m=state.matches.find(x=>x.id===id);
+    if(!m)return;
+    if(!m.attendance)m.attendance={yes:0,no:0,maybe:0,myVote:null};
+
+    const prev=m.attendance.myVote;
+    if(prev===vote){
+      if(m.attendance[vote]>0)m.attendance[vote]--;
+      m.attendance.myVote=null;
+    }else{
+      if(prev && m.attendance[prev]>0)m.attendance[prev]--;
+      m.attendance[vote]++;
+      m.attendance.myVote=vote;
+    }
+    renderMatches();
+  }));
   document.querySelectorAll('.delete-pick').forEach(b=>b.addEventListener('click',()=>{
     const id=Number(b.dataset.id);
     const m=state.matches.find(x=>x.id===id);
@@ -679,11 +734,15 @@ $('matchForm').addEventListener('submit',e=>{
     time:$('matchTime').value,
     endTime:$('matchEndTime').value,
     place:$('matchPlace').value.trim(),
-    memo:$('matchMemo').value.trim()
+    memo:$('matchMemo').value.trim(),
+    attendance:{yes:0,no:0,maybe:0,myVote:null}
   };
   if(!item.title||!item.date||!item.time||!item.place)return;
   const idx=state.matches.findIndex(x=>x.id===item.id);
-  if(idx>=0) state.matches[idx]=item;
+  if(idx>=0){
+    item.attendance=state.matches[idx].attendance||{yes:0,no:0,maybe:0,myVote:null};
+    state.matches[idx]=item;
+  }
   else state.matches.push(item);
   closeMatchModal();
   renderMatches();

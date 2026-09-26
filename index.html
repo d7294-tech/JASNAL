@@ -288,7 +288,7 @@
         <div class="row">
           <div>
             <div class="title" style="font-size:16px">오늘 그룹 스케줄</div>
-            <div class="sub" style="margin-top:5px">1그룹 오전 · 2그룹 오후 · 3그룹 휴무</div>
+            <div class="sub" style="margin-top:5px">4근 2휴 자동 패턴 적용</div>
           </div>
           <span style="font-size:22px">›</span>
         </div>
@@ -383,15 +383,9 @@
 <script>
 const state={
   year:2026,
-  month:10,
-  selected:'2026-11-01',
-  schedule:{
-    '2026-11-01':['오전','오후','휴무'],
-    '2026-11-08':['오전','오후','휴무'],
-    '2026-11-15':['오전','오후','휴무'],
-    '2026-11-22':['오전','오후','휴무'],
-    '2026-11-29':['오전','오후','휴무']
-  },
+  month:9,
+  selected:'2026-10-01',
+  schedule:{},
   events:{
     '2026-11-21':['정기 경기 20:00 · 영종 풋살장 A구장']
   },
@@ -402,6 +396,23 @@ const state={
 };
 
 const pad=n=>String(n).padStart(2,'0');
+const BASE_DATE = Date.UTC(2026,9,1);
+const cycle = ['오전','오전','오전','오전','휴무','휴무','오후','오후','오후','오후','휴무','휴무'];
+const groupOffsets = [0, 6, 10];
+
+function autoShiftForDate(k, groupIndex){
+  const [y,m,d] = k.split('-').map(Number);
+  const current = Date.UTC(y,m-1,d);
+  const diffDays = Math.floor((current - BASE_DATE) / 86400000);
+  const idx = ((diffDays + groupOffsets[groupIndex]) % cycle.length + cycle.length) % cycle.length;
+  return cycle[idx];
+}
+
+function getScheduleForDate(k){
+  if(state.schedule[k]) return state.schedule[k];
+  return [0,1,2].map(i=>autoShiftForDate(k,i));
+}
+
 const dateKey=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
 const $=id=>document.getElementById(id);
 
@@ -454,7 +465,7 @@ function renderCalendar(){
     num.textContent=d;
     btn.appendChild(num);
 
-    (state.schedule[k]||[]).forEach((v,i)=>{
+    getScheduleForDate(k).forEach((v,i)=>{
       if(v==='미정') return;
       const tag=document.createElement('span');
       tag.className='tag '+classFor(v);
@@ -478,7 +489,7 @@ function selectDate(k){
   renderCalendar();
   const [y,m,d]=k.split('-').map(Number);
   $('selectedDate').textContent=`${y}.${pad(m)}.${pad(d)}`;
-  const vals=state.schedule[k]||['미정','미정','미정'];
+  const vals=getScheduleForDate(k);
   $('g1').value=vals[0];
   $('g2').value=vals[1];
   $('g3').value=vals[2];

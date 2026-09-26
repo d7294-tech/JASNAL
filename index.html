@@ -145,7 +145,7 @@
     .sun,.sat{color:#dc2626}
     .fri{color:#2563eb}
     .day{
-      min-height:74px;
+      min-height:82px;
       border:0;
       border-right:1px solid var(--line);
       border-bottom:1px solid var(--line);
@@ -254,7 +254,7 @@
     .menu button:last-child{border-bottom:0}
     @media (max-width:380px){
       .app{padding-left:10px;padding-right:10px}
-      .day{min-height:66px;padding:3px}
+      .day{min-height:76px;padding:3px}
       .tag{font-size:8px}
     }
   </style>
@@ -315,23 +315,7 @@
         <div id="calendarGrid" class="cal"></div>
       </div>
 
-      <div class="card" style="margin-top:14px">
-        <div class="row">
-          <div>
-            <div class="sub">선택 날짜</div>
-            <div id="selectedDate" class="title" style="font-size:17px;margin-top:3px"></div>
-          </div>
-          <button id="addEvent" class="secondary">+ 일정</button>
-        </div>
-
-        <div class="field"><strong>1그룹</strong><select id="g1"><option>오전</option><option>오후</option><option>휴무</option><option>미정</option></select></div>
-        <div class="field"><strong>2그룹</strong><select id="g2"><option>오전</option><option>오후</option><option>휴무</option><option>미정</option></select></div>
-        <div class="field"><strong>3그룹</strong><select id="g3"><option>오전</option><option>오후</option><option>휴무</option><option>미정</option></select></div>
-
-        <button id="saveSchedule" class="primary">저장</button>
-        <div id="dayEvents" class="sub" style="margin-top:12px">등록된 일정이 없습니다.</div>
-      </div>
-    </section>
+      </section>
 
     <section id="matches" class="screen">
       <div class="row" style="margin-bottom:12px">
@@ -398,7 +382,7 @@ const state={
 const pad=n=>String(n).padStart(2,'0');
 const BASE_DATE = Date.UTC(2026,9,1);
 const cycle = ['오전','오전','오전','오전','휴무','휴무','오후','오후','오후','오후','휴무','휴무'];
-const groupOffsets = [0, 6, 10];
+const groupOffsets = [0, 9, 5];
 
 function autoShiftForDate(k, groupIndex){
   const [y,m,d] = k.split('-').map(Number);
@@ -488,20 +472,8 @@ function selectDate(k){
   state.selected=k;
   renderCalendar();
   const [y,m,d]=k.split('-').map(Number);
-  $('selectedDate').textContent=`${y}.${pad(m)}.${pad(d)}`;
-  const vals=getScheduleForDate(k);
-  $('g1').value=vals[0];
-  $('g2').value=vals[1];
-  $('g3').value=vals[2];
-  renderDayEvents();
 }
 
-function renderDayEvents(){
-  const list=state.events[state.selected]||[];
-  $('dayEvents').innerHTML=list.length
-    ? list.map(v=>`<div style="background:#fafafa;border-radius:10px;padding:10px;margin-top:6px">📌 ${v}</div>`).join('')
-    : '등록된 일정이 없습니다.';
-}
 
 $('prevMonth').addEventListener('click',()=>{
   state.month--;
@@ -515,20 +487,7 @@ $('nextMonth').addEventListener('click',()=>{
   selectDate(dateKey(state.year,state.month,1));
 });
 
-$('saveSchedule').addEventListener('click',()=>{
-  state.schedule[state.selected]=[$('g1').value,$('g2').value,$('g3').value];
-  renderCalendar();
-  $('saveSchedule').textContent='저장 완료 ✓';
-  setTimeout(()=>$('saveSchedule').textContent='저장',900);
-});
 
-$('addEvent').addEventListener('click',()=>{
-  const txt=prompt('일정 내용을 입력하세요.');
-  if(!txt || !txt.trim()) return;
-  (state.events[state.selected]||(state.events[state.selected]=[])).push(txt.trim());
-  renderCalendar();
-  renderDayEvents();
-});
 
 function renderMatches(){
   $('matchList').innerHTML=state.matches.map(m=>`

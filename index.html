@@ -429,7 +429,7 @@
         <div id="authStatus" class="sync-status"></div>
       </div>
 
-      <div class="sync-box">
+      <div id="cloudAdminBox" class="sync-box" style="display:none">
         <div class="title" style="font-size:16px">Cloud 연결</div>
         <div class="sub" style="margin-top:4px">Supabase를 연결하면 다른 휴대폰/PC와 데이터가 자동 공유됩니다.</div>
 
@@ -654,6 +654,23 @@ function renderAuthState(){
     out.style.display='block'; inn.style.display='none';
     if(status) status.textContent=remoteReady?'로그인이 필요합니다.':'';
   }
+  applyRoleVisibility();
+}
+
+function applyRoleVisibility(){
+  const role=currentMember?.role||'회원';
+  const isAdmin=role==='관리자';
+  const isStaff=isAdmin || role==='운영진';
+
+  // Cloud connection credentials/settings: administrator only.
+  const cloudBox=$('cloudAdminBox');
+  if(cloudBox) cloudBox.style.display=isAdmin?'block':'none';
+
+  // Management areas: staff (운영진/관리자) only.
+  if($('addMember')) $('addMember').style.display=isStaff?'inline-block':'none';
+  if($('newMatchBtn')) $('newMatchBtn').style.display=isStaff?'inline-block':'none';
+  if($('deleteModeBtn')) $('deleteModeBtn').style.display=isStaff?'inline-block':'none';
+  document.querySelectorAll('.edit-match,.edit-member').forEach(el=>el.style.display=isStaff?'block':'none');
 }
 
 function subscribeRealtime(){
@@ -1091,6 +1108,7 @@ function renderMatches(){
     showScreen('calendar');renderCalendar();
   }));
   if(typeof applyDeleteMode==='function') applyDeleteMode();
+  applyRoleVisibility();
 }
 
 function openMatchModal(id=null, presetDate=null){
@@ -1125,7 +1143,7 @@ function closeMatchModal(){
   $('matchModal').setAttribute('aria-hidden','true');
 }
 
-$('newMatchBtn').addEventListener('click',()=>openMatchModal());
+$('newMatchBtn').addEventListener('click',()=>{ if(['운영진','관리자'].includes(currentMember?.role)) openMatchModal(); });
 let deleteMode=false;
 function applyDeleteMode(){
   document.querySelectorAll('.delete-pick').forEach(btn=>{
@@ -1232,6 +1250,7 @@ function renderMembers(){
   document.querySelectorAll('.edit-member').forEach(b=>{
     b.addEventListener('click',()=>openMemberModal(Number(b.dataset.id)));
   });
+  applyRoleVisibility();
 }
 
 function openMemberModal(id=null){
@@ -1266,7 +1285,7 @@ function closeMemberModal(){
   $('memberModal').setAttribute('aria-hidden','true');
 }
 
-$('addMember').addEventListener('click',()=>openMemberModal());
+$('addMember').addEventListener('click',()=>{ if(['운영진','관리자'].includes(currentMember?.role)) openMemberModal(); });
 $('closeMemberModal').addEventListener('click',closeMemberModal);
 $('memberModal').addEventListener('click',e=>{
   if(e.target===$('memberModal')) closeMemberModal();
@@ -1358,6 +1377,7 @@ $('editMyProfileBtn').addEventListener('click',()=>{
 });
 
 $('connectSupabase').addEventListener('click',async ()=>{
+  if(currentMember?.role!=='관리자'){ setSyncStatus('관리자만 Cloud 연결 설정을 변경할 수 있습니다.',false); return; }
   const url=$('supabaseUrl').value.trim();
   const key=$('supabaseKey').value.trim();
   if(!url || !key){ setSyncStatus('Project URL과 Key를 입력하세요.',false); return; }
@@ -1369,6 +1389,7 @@ renderAuthState();
 });
 
 $('disconnectSupabase').addEventListener('click',()=>{
+  if(currentMember?.role!=='관리자'){ setSyncStatus('관리자만 Cloud 연결 설정을 변경할 수 있습니다.',false); return; }
   localStorage.removeItem(SB_URL_KEY);
   localStorage.removeItem(SB_ANON_KEY);
   if(realtimeChannel && supabase) supabase.removeChannel(realtimeChannel);

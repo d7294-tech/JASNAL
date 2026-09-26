@@ -274,6 +274,11 @@
     .dues-status.unpaid{background:#fef2f2;color:#b91c1c}
     .dues-actions{display:flex;gap:8px;margin-top:10px}
     .dues-actions button{flex:1}
+    .venue-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
+    .venue-title{font-weight:800;font-size:16px}
+    .venue-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+    .venue-actions{display:flex;gap:8px;margin-top:10px}
+    .venue-actions button,.venue-actions a{flex:1;text-align:center;text-decoration:none}
     @media (max-width:380px){
       .app{padding-left:10px;padding-right:10px}
       .day{min-height:76px;padding:3px}
@@ -463,7 +468,19 @@
     
     
     
-    <section id="dues" class="screen">
+    
+    <section id="venues" class="screen">
+      <div class="row" style="margin-bottom:12px">
+        <div>
+          <div class="title">구장 정보</div>
+          <div class="sub" style="margin-top:4px">자주 사용하는 풋살장 정보</div>
+        </div>
+        <button id="newVenueBtn" class="secondary" type="button">+ 구장</button>
+      </div>
+      <div id="venueList" class="list"></div>
+    </section>
+
+<section id="dues" class="screen">
       <div class="row" style="margin-bottom:12px">
         <div>
           <div class="title">회원 관리</div>
@@ -555,7 +572,7 @@
 
 
       <div class="card menu" style="padding:0;margin-top:12px">
-        <button>구장 정보</button>
+        <button id="openVenuesBtn" type="button">구장 정보</button>
         <button id="openDuesBtn" class="manager-only" type="button">회원 관리</button>
         <button id="openNoticesBtn" type="button">공지사항</button>
         <button>설정</button>
@@ -567,6 +584,31 @@
 
 
 
+
+
+  <div id="venueModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="venueModalTitle">
+      <div class="row">
+        <h3 id="venueModalTitle">구장 등록</h3>
+        <button id="closeVenueModal" class="secondary" type="button">닫기</button>
+      </div>
+      <form id="venueForm">
+        <input id="venueId" type="hidden">
+        <label>구장명<input id="venueName" required placeholder="예: 영종 풋살장 A구장"></label>
+        <label>주소<input id="venueAddress" placeholder="주소"></label>
+        <label>지도 링크<input id="venueMapUrl" type="url" placeholder="https://..."></label>
+        <label>대관료<input id="venueFee" type="number" min="0" step="1000" placeholder="예: 140000"></label>
+        <label>주차<input id="venueParking" placeholder="예: 무료 / 2시간 무료"></label>
+        <label>메모
+          <textarea id="venueMemo" class="search" style="min-height:100px;margin-top:5px" placeholder="샤워실, 화장실, 주의사항 등"></textarea>
+        </label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+      <div id="venueDeleteWrap" style="display:none">
+        <button id="deleteVenueBtn" class="primary danger" type="button">구장 삭제</button>
+      </div>
+    </div>
+  </div>
 
   <div id="duesModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="duesModalTitle">
@@ -714,6 +756,7 @@ const state={
   notices:[],
   duesPayments:[],
   duesSettings:{amount:30000,dueDay:10},
+  venues:[],
   matches:[
     {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
   ],
@@ -887,6 +930,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'notices'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'dues_payments'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'club_settings'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'venues'},scheduleRemoteReload)
     .subscribe();
 }
 
@@ -904,16 +948,18 @@ async function loadRemoteState(){
       {data:votes,error:ve},
       {data:notices,error:ne},
       {data:duesPayments,error:de},
-      {data:clubSettings,error:cse}
+      {data:clubSettings,error:cse},
+      {data:venues,error:vne}
     ] = await Promise.all([
       supabase.from('matches').select('*').order('match_date',{ascending:true}),
       supabase.from('members').select('*').order('name',{ascending:true}),
       supabase.from('votes').select('*'),
       supabase.from('notices').select('*').order('created_at',{ascending:false}),
       supabase.from('dues_payments').select('*').order('month_key',{ascending:false}),
-      supabase.from('club_settings').select('*').eq('key','dues').maybeSingle()
+      supabase.from('club_settings').select('*').eq('key','dues').maybeSingle(),
+      supabase.from('venues').select('*').order('name',{ascending:true})
     ]);
-    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;
+    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;if(vne)throw vne;
 
     const mine=currentUser?.id||deviceId();
     const memberNameByAuthId={};
@@ -980,6 +1026,16 @@ async function loadRemoteState(){
       };
     }
 
+    state.venues=(venues||[]).map(v=>({
+      id:Number(v.id),
+      name:v.name,
+      address:v.address||'',
+      mapUrl:v.map_url||'',
+      fee:Number(v.fee||0),
+      parking:v.parking||'',
+      memo:v.memo||''
+    }));
+
     saveState();
     rebuildEventsFromMatches();
     renderCalendar();
@@ -988,6 +1044,7 @@ async function loadRemoteState(){
     renderNotices();
     renderDues();
     renderMemberDuesSummary();
+    renderVenues();
     refreshHome();
     applyRoleVisibility();
     setSyncStatus('Cloud 연결됨 · 최신 데이터',true);
@@ -1084,6 +1141,27 @@ async function remoteSaveDuesSettings(settings){
   if(error)throw error;
 }
 
+
+async function remoteUpsertVenue(item){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('venues').upsert({
+    id:item.id,
+    name:item.name,
+    address:item.address||'',
+    map_url:item.mapUrl||'',
+    fee:item.fee||0,
+    parking:item.parking||'',
+    memo:item.memo||''
+  });
+  if(error)throw error;
+}
+
+async function remoteDeleteVenue(id){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('venues').delete().eq('id',id);
+  if(error)throw error;
+}
+
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -1091,7 +1169,8 @@ function saveState(){
       members: state.members,
       notices: state.notices,
       duesPayments: state.duesPayments,
-      duesSettings: state.duesSettings
+      duesSettings: state.duesSettings,
+      venues: state.venues
     }));
   }catch(e){}
 }
@@ -1110,6 +1189,7 @@ function loadState(){
     if(Array.isArray(saved.notices)) state.notices=saved.notices;
     if(Array.isArray(saved.duesPayments)) state.duesPayments=saved.duesPayments;
     if(saved.duesSettings) state.duesSettings=saved.duesSettings;
+    if(Array.isArray(saved.venues)) state.venues=saved.venues;
   }catch(e){}
 }
 
@@ -1290,6 +1370,119 @@ function renderMemberDuesSummary(){
       </div>`).join('')
     : '<div class="sub">조건에 맞는 회비 내역이 없습니다.</div>';
 }
+
+
+function renderVenues(){
+  if(!$('venueList'))return;
+  const list=[...state.venues].sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  $('venueList').innerHTML=list.length ? list.map(v=>`
+    <div class="venue-card">
+      <div class="venue-title">${v.name}</div>
+      ${v.address?`<div class="venue-meta">${v.address}</div>`:''}
+      ${v.fee?`<div class="venue-meta">대관료 ${Number(v.fee).toLocaleString()}원</div>`:''}
+      ${v.parking?`<div class="venue-meta">주차: ${v.parking}</div>`:''}
+      ${v.memo?`<div class="venue-meta">${v.memo}</div>`:''}
+      <div class="venue-actions">
+        ${v.mapUrl?`<a class="secondary" href="${v.mapUrl}" target="_blank" rel="noopener">지도 보기</a>`:''}
+        ${isManager()?`<button class="secondary edit-venue" data-id="${v.id}" type="button">수정</button>`:''}
+      </div>
+    </div>`).join('') : '<div class="card"><div class="sub">등록된 구장이 없습니다.</div></div>';
+
+  document.querySelectorAll('.edit-venue').forEach(b=>b.addEventListener('click',()=>{
+    openVenueModal(Number(b.dataset.id));
+  }));
+
+  if($('newVenueBtn'))$('newVenueBtn').style.display=isManager()?'inline-block':'none';
+}
+
+function openVenueModal(id=null){
+  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
+  const editing=id!==null;
+  $('venueModalTitle').textContent=editing?'구장 수정':'구장 등록';
+  $('venueDeleteWrap').style.display=editing?'block':'none';
+
+  if(editing){
+    const v=state.venues.find(x=>x.id===id);
+    if(!v)return;
+    $('venueId').value=v.id;
+    $('venueName').value=v.name||'';
+    $('venueAddress').value=v.address||'';
+    $('venueMapUrl').value=v.mapUrl||'';
+    $('venueFee').value=v.fee||'';
+    $('venueParking').value=v.parking||'';
+    $('venueMemo').value=v.memo||'';
+  }else{
+    $('venueId').value='';
+    $('venueName').value='';
+    $('venueAddress').value='';
+    $('venueMapUrl').value='';
+    $('venueFee').value='';
+    $('venueParking').value='';
+    $('venueMemo').value='';
+  }
+
+  $('venueModal').classList.add('show');
+  $('venueModal').setAttribute('aria-hidden','false');
+}
+
+function closeVenueModal(){
+  $('venueModal').classList.remove('show');
+  $('venueModal').setAttribute('aria-hidden','true');
+}
+
+$('openVenuesBtn').addEventListener('click',()=>{
+  showScreen('venues');
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
+  if(moreBtn)moreBtn.classList.add('active');
+  renderVenues();
+});
+
+$('newVenueBtn').addEventListener('click',()=>openVenueModal());
+$('closeVenueModal').addEventListener('click',closeVenueModal);
+$('venueModal').addEventListener('click',e=>{
+  if(e.target===$('venueModal'))closeVenueModal();
+});
+
+$('venueForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(!isManager())return;
+
+  const id=$('venueId').value?Number($('venueId').value):Date.now();
+  const item={
+    id,
+    name:$('venueName').value.trim(),
+    address:$('venueAddress').value.trim(),
+    mapUrl:$('venueMapUrl').value.trim(),
+    fee:Number($('venueFee').value||0),
+    parking:$('venueParking').value.trim(),
+    memo:$('venueMemo').value.trim()
+  };
+  if(!item.name)return;
+
+  const idx=state.venues.findIndex(x=>x.id===id);
+  if(idx>=0)state.venues[idx]=item;
+  else state.venues.push(item);
+
+  saveState();
+  try{ await remoteUpsertVenue(item); }catch(err){ setSyncStatus('구장 저장 동기화 실패: '+err.message,false); }
+  closeVenueModal();
+  renderVenues();
+});
+
+$('deleteVenueBtn').addEventListener('click',async ()=>{
+  if(!isManager())return;
+  const id=Number($('venueId').value);
+  if(!id)return;
+  const v=state.venues.find(x=>x.id===id);
+  if(v && confirm(`${v.name} 구장을 삭제할까요?`)){
+    state.venues=state.venues.filter(x=>x.id!==id);
+    saveState();
+    try{ await remoteDeleteVenue(id); }catch(err){ setSyncStatus('구장 삭제 동기화 실패: '+err.message,false); }
+    closeVenueModal();
+    renderVenues();
+  }
+});
 
 function currentMonthKey(){
   const d=new Date();
@@ -2248,6 +2441,7 @@ makeMonthOptions();
 makeMemberDuesMonthOptions();
 renderDues();
 renderMemberDuesSummary();
+renderVenues();
 refreshHome();
 initSupabase();
 </script>

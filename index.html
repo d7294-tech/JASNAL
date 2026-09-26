@@ -280,6 +280,13 @@
     .attendance-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 4px;font-size:12px;font-weight:800}
     .attendance-btn.active{background:var(--green-soft);border-color:var(--green);color:var(--green-dark)}
     .attendance-note{font-size:11px;color:var(--muted);margin-top:7px}
+    .attendance-view-btn{width:100%;margin-top:8px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px;font-weight:800}
+    .vote-list-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+    .vote-list-section{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}
+    .vote-list-title{font-weight:800;margin-bottom:8px}
+    .vote-name-list{display:flex;flex-wrap:wrap;gap:6px}
+    .vote-name{font-size:12px;padding:5px 8px;border-radius:999px;background:#f3f4f6}
+    .vote-empty{font-size:12px;color:var(--muted)}
     .member-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
     .member-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:#f3f4f6;color:var(--text)}
     .member-card-actions{display:flex;gap:8px;margin-top:10px}
@@ -320,6 +327,7 @@
           <button class="vote" data-vote="미정">미정<br><strong>5</strong></button>
         </div>
         <div id="voteMsg" class="sub" style="margin-top:10px">참석 여부를 선택하세요.</div>
+        <button id="homeVoteListBtn" class="attendance-view-btn" type="button">투표 인원 보기</button>
       </div>
 
       <button class="home-link" data-go="calendar">
@@ -463,6 +471,33 @@
 
   </main>
 
+
+
+  <div id="voteListModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="voteListTitle">
+      <div class="row">
+        <div>
+          <h3 id="voteListTitle" style="margin-bottom:4px">투표 인원</h3>
+          <div id="voteListMatchInfo" class="sub"></div>
+        </div>
+        <button id="closeVoteListModal" class="secondary" type="button">닫기</button>
+      </div>
+      <div class="vote-list-grid">
+        <div class="vote-list-section">
+          <div id="voteYesTitle" class="vote-list-title">참석 0명</div>
+          <div id="voteYesList" class="vote-name-list"></div>
+        </div>
+        <div class="vote-list-section">
+          <div id="voteNoTitle" class="vote-list-title">불참 0명</div>
+          <div id="voteNoList" class="vote-name-list"></div>
+        </div>
+        <div class="vote-list-section">
+          <div id="voteMaybeTitle" class="vote-list-title">미정 0명</div>
+          <div id="voteMaybeList" class="vote-name-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="matchModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle">
@@ -724,13 +759,23 @@ async function loadRemoteState(){
     if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;
 
     const mine=currentUser?.id||deviceId();
+    const memberNameByAuthId={};
+    for(const m of members||[]){
+      if(m.auth_user_id) memberNameByAuthId[m.auth_user_id]=m.name;
+    }
+
     const voteGroups={};
     for(const v of votes||[]){
-      if(!voteGroups[v.match_id]) voteGroups[v.match_id]={yes:0,no:0,maybe:0,myVote:null};
-      if(v.vote==='yes')voteGroups[v.match_id].yes++;
-      if(v.vote==='no')voteGroups[v.match_id].no++;
-      if(v.vote==='maybe')voteGroups[v.match_id].maybe++;
-      if(v.voter_id===mine)voteGroups[v.match_id].myVote=v.vote;
+      if(!voteGroups[v.match_id]) voteGroups[v.match_id]={
+        yes:0,no:0,maybe:0,myVote:null,
+        yesNames:[],noNames:[],maybeNames:[]
+      };
+      const g=voteGroups[v.match_id];
+      const displayName=memberNameByAuthId[v.voter_id] || '회원';
+      if(v.vote==='yes'){ g.yes++; g.yesNames.push(displayName); }
+      if(v.vote==='no'){ g.no++; g.noNames.push(displayName); }
+      if(v.vote==='maybe'){ g.maybe++; g.maybeNames.push(displayName); }
+      if(v.voter_id===mine)g.myVote=v.vote;
     }
 
     state.matches=(matches||[]).map(m=>({
@@ -741,7 +786,7 @@ async function loadRemoteState(){
       endTime:(m.end_time||'').slice(0,5),
       place:m.place,
       memo:m.memo||'',
-      attendance:voteGroups[m.id]||{yes:0,no:0,maybe:0,myVote:null}
+      attendance:voteGroups[m.id]||{yes:0,no:0,maybe:0,myVote:null,yesNames:[],noNames:[],maybeNames:[]}
     }));
 
     state.members=(members||[]).map(m=>({
@@ -905,13 +950,24 @@ function showScreen(id){
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.go)));
 
+$('homeVoteListBtn').addEventListener('click',()=>{
+  const next=getNextMatch();
+  if(!next){ alert('등록된 경기가 없습니다.'); return; }
+  openVoteListModal(next.id);
+});
+
+$('closeVoteListModal').addEventListener('click',closeVoteListModal);
+$('voteListModal').addEventListener('click',e=>{
+  if(e.target===$('voteListModal')) closeVoteListModal();
+});
+
 document.querySelectorAll('.vote').forEach(btn=>{
   btn.addEventListener('click',async ()=>{
     const next=getNextMatch();
     if(!next)return;
     if(remoteReady && !currentUser){ alert('로그인 후 투표할 수 있습니다.'); return; }
     if(remoteReady && !isApproved()){ alert('가입 승인 후 투표할 수 있습니다.'); return; }
-    if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
+    if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null,yesNames:[],noNames:[],maybeNames:[]};
     const map={참석:'yes',불참:'no',미정:'maybe'};
     const vote=map[btn.dataset.vote];
     const prev=next.attendance.myVote;
@@ -1074,6 +1130,47 @@ function refreshHome(){
     : '참석 여부를 선택하세요.';
 }
 
+
+function openVoteListModal(matchId){
+  if(remoteReady && !currentUser){
+    alert('로그인 후 볼 수 있습니다.');
+    return;
+  }
+  if(remoteReady && !isApproved()){
+    alert('가입 승인 후 볼 수 있습니다.');
+    return;
+  }
+
+  const m=state.matches.find(x=>x.id===matchId);
+  if(!m)return;
+
+  const a=m.attendance||{yes:0,no:0,maybe:0,yesNames:[],noNames:[],maybeNames:[]};
+  $('voteListMatchInfo').textContent=`${formatKoreanDate(m.date)} · ${m.time} · ${m.place}`;
+
+  const renderNames=(id,names)=>{
+    const el=$(id);
+    const safe=(names||[]).filter(Boolean);
+    el.innerHTML=safe.length
+      ? safe.map(n=>`<span class="vote-name">${n}</span>`).join('')
+      : '<span class="vote-empty">없음</span>';
+  };
+
+  $('voteYesTitle').textContent=`참석 ${a.yes||0}명`;
+  $('voteNoTitle').textContent=`불참 ${a.no||0}명`;
+  $('voteMaybeTitle').textContent=`미정 ${a.maybe||0}명`;
+  renderNames('voteYesList',a.yesNames);
+  renderNames('voteNoList',a.noNames);
+  renderNames('voteMaybeList',a.maybeNames);
+
+  $('voteListModal').classList.add('show');
+  $('voteListModal').setAttribute('aria-hidden','false');
+}
+
+function closeVoteListModal(){
+  $('voteListModal').classList.remove('show');
+  $('voteListModal').setAttribute('aria-hidden','true');
+}
+
 function renderMatches(){
   rebuildEventsFromMatches();
   renderCalendar();
@@ -1096,6 +1193,7 @@ function renderMatches(){
         <button class="attendance-btn ${m.attendance?.myVote==='maybe'?'active':''}" data-id="${m.id}" data-vote="maybe" type="button">미정<br>${m.attendance?.maybe||0}</button>
       </div>
       <div class="attendance-note">${m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.'}</div>
+      <button class="attendance-view-btn vote-list-btn" data-id="${m.id}" type="button">투표 인원 보기</button>
       <div class="match-actions">
         ${isManager()?`<button class="secondary edit-match" data-id="${m.id}">수정</button>`:''}
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
@@ -1112,7 +1210,7 @@ function renderMatches(){
     if(remoteReady && !isApproved()){ alert('가입 승인 후 투표할 수 있습니다.'); return; }
     const m=state.matches.find(x=>x.id===id);
     if(!m)return;
-    if(!m.attendance)m.attendance={yes:0,no:0,maybe:0,myVote:null};
+    if(!m.attendance)m.attendance={yes:0,no:0,maybe:0,myVote:null,yesNames:[],noNames:[],maybeNames:[]};
 
     const prev=m.attendance.myVote;
     if(prev===vote){
@@ -1128,6 +1226,9 @@ function renderMatches(){
       try{ await remoteSetVote(id,m.attendance.myVote); }catch(err){ setSyncStatus('투표 동기화 실패: '+err.message,false); }
     }
     renderMatches();
+  }));
+  document.querySelectorAll('.vote-list-btn').forEach(b=>b.addEventListener('click',()=>{
+    openVoteListModal(Number(b.dataset.id));
   }));
   document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
     const [y,m,d]=b.dataset.date.split('-').map(Number);

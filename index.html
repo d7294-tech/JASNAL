@@ -288,6 +288,10 @@
     .sync-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
     .sync-status{font-size:12px;color:var(--muted);margin-top:8px}
     .sync-ok{color:#059669}.sync-bad{color:#dc2626}
+    .auth-panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+    .auth-user{font-size:13px;color:var(--muted);margin-top:4px}
+    .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .profile-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:var(--green-soft);color:var(--green-dark);font-size:11px;font-weight:800;margin-top:6px}
     .match-actions button{flex:1}
   </style>
 </head>
@@ -402,6 +406,28 @@
         <div id="moreMemberCount" class="sub" style="margin-top:5px"></div>
       </div>
 
+      <div class="auth-panel">
+        <div class="title" style="font-size:16px">내 계정</div>
+        <div id="authSignedOut">
+          <div class="sub" style="margin-top:4px">로그인하면 투표가 회원 계정 기준으로 저장됩니다.</div>
+          <input id="authEmail" class="search" style="margin-top:10px" type="email" placeholder="이메일">
+          <input id="authPassword" class="search" type="password" placeholder="비밀번호 (6자 이상)">
+          <div class="auth-grid">
+            <button id="loginBtn" class="primary" type="button" style="margin-top:0">로그인</button>
+            <button id="signupBtn" class="secondary" type="button">회원가입</button>
+          </div>
+        </div>
+        <div id="authSignedIn" style="display:none">
+          <div id="authEmailView" class="auth-user"></div>
+          <div id="authProfileView"></div>
+          <div class="auth-grid">
+            <button id="editMyProfileBtn" class="secondary" type="button">내 정보 수정</button>
+            <button id="logoutBtn" class="secondary" type="button">로그아웃</button>
+          </div>
+        </div>
+        <div id="authStatus" class="sync-status"></div>
+      </div>
+
       <div class="sync-box">
         <div class="title" style="font-size:16px">Cloud 연결</div>
         <div class="sub" style="margin-top:4px">Supabase를 연결하면 다른 휴대폰/PC와 데이터가 자동 공유됩니다.</div>
@@ -460,7 +486,7 @@
         <button id="closeMemberModal" class="secondary" type="button">닫기</button>
       </div>
       <form id="memberForm">
-        <input id="memberId" type="hidden">
+        <input id="memberId" type="hidden"><input id="memberAuthUserId" type="hidden">
         <label>이름<input id="memberName" required placeholder="이름"></label>
         <label>그룹
           <select id="memberGroup" class="search" style="margin-top:5px">
@@ -523,6 +549,9 @@ let supabase=null;
 let realtimeChannel=null;
 let remoteReady=false;
 let remoteReloadTimer=null;
+let currentUser=null;
+let currentMember=null;
+
 
 function deviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
@@ -549,25 +578,80 @@ async function initSupabase(){
   if($('supabaseKey'))$('supabaseKey').value=key;
 
   if(!url || !key){
-    supabase=null; remoteReady=false;
+    supabase=null; remoteReady=false; currentUser=null; currentMember=null;
     setSyncStatus('현재: 이 기기에만 저장');
+    renderAuthState();
     return false;
   }
 
   try{
     supabase=createClient(url,key);
-    const {error}=await supabase.from('matches').select('id').limit(1);
-    if(error)throw error;
     remoteReady=true;
-    setSyncStatus('Cloud 연결됨 · 자동 동기화 중',true);
-    await loadRemoteState();
-    subscribeRealtime();
+
+    const {data:{session}}=await supabase.auth.getSession();
+    currentUser=session?.user||null;
+
+    supabase.auth.onAuthStateChange(async (_event,session)=>{
+      currentUser=session?.user||null;
+      if(currentUser){
+        await loadMyMemberProfile();
+        await loadRemoteState();
+        subscribeRealtime();
+      }else{
+        currentMember=null;
+        if(realtimeChannel && supabase) supabase.removeChannel(realtimeChannel);
+        realtimeChannel=null;
+      }
+      renderAuthState();
+      refreshHome();
+      renderMatches();
+    });
+
+    if(currentUser){
+      await loadMyMemberProfile();
+      await loadRemoteState();
+      subscribeRealtime();
+      setSyncStatus('Cloud 연결됨 · 로그인됨',true);
+    }else{
+      setSyncStatus('Cloud 연결됨 · 로그인 필요',true);
+    }
+    renderAuthState();
     return true;
   }catch(err){
     console.error(err);
     supabase=null; remoteReady=false;
     setSyncStatus('연결 실패: '+(err?.message||'설정을 확인하세요.'),false);
     return false;
+  }
+}
+
+async function loadMyMemberProfile(){
+  if(!supabase || !currentUser){ currentMember=null; return null; }
+  const {data,error}=await supabase.from('members')
+    .select('*')
+    .eq('auth_user_id',currentUser.id)
+    .maybeSingle();
+  if(error){ console.error(error); currentMember=null; return null; }
+  currentMember=data?{
+    id:Number(data.id),name:data.name,group:data.group_name,role:data.role,status:data.status,
+    authUserId:data.auth_user_id
+  }:null;
+  return currentMember;
+}
+
+function renderAuthState(){
+  const out=$('authSignedOut'), inn=$('authSignedIn'), status=$('authStatus');
+  if(!out||!inn)return;
+  if(currentUser){
+    out.style.display='none'; inn.style.display='block';
+    $('authEmailView').textContent=currentUser.email||'로그인됨';
+    $('authProfileView').innerHTML=currentMember
+      ? `<div style="margin-top:8px;font-weight:800">${currentMember.name}</div><span class="profile-badge">${currentMember.group} · ${currentMember.role}</span>`
+      : `<div class="sub" style="margin-top:8px">회원 정보를 등록해주세요.</div>`;
+    if(status) status.textContent='로그인됨';
+  }else{
+    out.style.display='block'; inn.style.display='none';
+    if(status) status.textContent=remoteReady?'로그인이 필요합니다.':'';
   }
 }
 
@@ -597,7 +681,7 @@ async function loadRemoteState(){
     ]);
     if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;
 
-    const mine=deviceId();
+    const mine=currentUser?.id||deviceId();
     const voteGroups={};
     for(const v of votes||[]){
       if(!voteGroups[v.match_id]) voteGroups[v.match_id]={yes:0,no:0,maybe:0,myVote:null};
@@ -623,7 +707,8 @@ async function loadRemoteState(){
       name:m.name,
       group:m.group_name,
       role:m.role,
-      status:m.status
+      status:m.status,
+      authUserId:m.auth_user_id||null
     }));
 
     saveState();
@@ -656,8 +741,8 @@ async function remoteDeleteMatch(id){
 }
 
 async function remoteSetVote(matchId,vote){
-  if(!remoteReady)return;
-  const voter=deviceId();
+  if(!remoteReady || !currentUser) throw new Error('로그인이 필요합니다.');
+  const voter=currentUser.id;
   if(!vote){
     const {error}=await supabase.from('votes').delete().eq('match_id',matchId).eq('voter_id',voter);
     if(error)throw error;
@@ -670,7 +755,8 @@ async function remoteSetVote(matchId,vote){
 async function remoteUpsertMember(item){
   if(!remoteReady)return;
   const {error}=await supabase.from('members').upsert({
-    id:item.id,name:item.name,group_name:item.group,role:item.role,status:item.status
+    id:item.id,name:item.name,group_name:item.group,role:item.role,status:item.status,
+    auth_user_id:item.authUserId||null
   });
   if(error)throw error;
 }
@@ -780,6 +866,7 @@ document.querySelectorAll('.vote').forEach(btn=>{
   btn.addEventListener('click',async ()=>{
     const next=getNextMatch();
     if(!next)return;
+    if(remoteReady && !currentUser){ alert('로그인 후 투표할 수 있습니다.'); return; }
     if(!next.attendance)next.attendance={yes:0,no:0,maybe:0,myVote:null};
     const map={참석:'yes',불참:'no',미정:'maybe'};
     const vote=map[btn.dataset.vote];
@@ -977,6 +1064,7 @@ function renderMatches(){
   document.querySelectorAll('.attendance-btn').forEach(b=>b.addEventListener('click',async ()=>{
     const id=Number(b.dataset.id);
     const vote=b.dataset.vote;
+    if(remoteReady && !currentUser){ alert('로그인 후 투표할 수 있습니다.'); return; }
     const m=state.matches.find(x=>x.id===id);
     if(!m)return;
     if(!m.attendance)m.attendance={yes:0,no:0,maybe:0,myVote:null};
@@ -1154,12 +1242,14 @@ function openMemberModal(id=null){
     const m=state.members.find(x=>x.id===id);
     if(!m)return;
     $('memberId').value=m.id;
+    $('memberAuthUserId').value=m.authUserId||'';
     $('memberName').value=m.name||'';
     $('memberGroup').value=m.group||'1그룹';
     $('memberRole').value=m.role||'회원';
     $('memberStatus').value=m.status||'활동중';
   }else{
     $('memberId').value='';
+    $('memberAuthUserId').value=currentUser?.id||'';
     $('memberName').value='';
     $('memberGroup').value='1그룹';
     $('memberRole').value='회원';
@@ -1188,7 +1278,8 @@ $('memberForm').addEventListener('submit',async e=>{
     name:$('memberName').value.trim(),
     group:$('memberGroup').value,
     role:$('memberRole').value,
-    status:$('memberStatus').value
+    status:$('memberStatus').value,
+    authUserId:$('memberAuthUserId').value||null
   };
   if(!item.name)return;
 
@@ -1198,7 +1289,13 @@ $('memberForm').addEventListener('submit',async e=>{
 
   saveState();
   if(remoteReady){
-    try{ await remoteUpsertMember(item); }catch(err){ setSyncStatus('회원 저장 동기화 실패: '+err.message,false); }
+    try{
+      await remoteUpsertMember(item);
+      if(currentUser && item.authUserId===currentUser.id){
+        currentMember=item;
+        renderAuthState();
+      }
+    }catch(err){ setSyncStatus('회원 저장 동기화 실패: '+err.message,false); }
   }
   closeMemberModal();
   renderMembers();
@@ -1224,6 +1321,41 @@ $('memberGroupFilter').addEventListener('change',renderMembers);
 $('memberStatusFilter').addEventListener('change',renderMembers);
 
 
+
+$('loginBtn').addEventListener('click',async ()=>{
+  if(!supabase){ $('authStatus').textContent='먼저 Cloud 연결을 완료하세요.'; return; }
+  const email=$('authEmail').value.trim(), password=$('authPassword').value;
+  if(!email||!password){ $('authStatus').textContent='이메일과 비밀번호를 입력하세요.'; return; }
+  $('authStatus').textContent='로그인 중...';
+  const {error}=await supabase.auth.signInWithPassword({email,password});
+  if(error){ $('authStatus').textContent='로그인 실패: '+error.message; }
+});
+
+$('signupBtn').addEventListener('click',async ()=>{
+  if(!supabase){ $('authStatus').textContent='먼저 Cloud 연결을 완료하세요.'; return; }
+  const email=$('authEmail').value.trim(), password=$('authPassword').value;
+  if(!email||password.length<6){ $('authStatus').textContent='이메일과 6자 이상 비밀번호를 입력하세요.'; return; }
+  $('authStatus').textContent='가입 처리 중...';
+  const {data,error}=await supabase.auth.signUp({email,password});
+  if(error){ $('authStatus').textContent='회원가입 실패: '+error.message; return; }
+  if(data.session){
+    currentUser=data.user;
+    renderAuthState();
+    openMemberModal();
+  }else{
+    $('authStatus').textContent='가입 완료. 이메일 인증 후 로그인하세요.';
+  }
+});
+
+$('logoutBtn').addEventListener('click',async ()=>{
+  if(supabase) await supabase.auth.signOut();
+});
+
+$('editMyProfileBtn').addEventListener('click',()=>{
+  if(currentMember) openMemberModal(currentMember.id);
+  else openMemberModal();
+});
+
 $('connectSupabase').addEventListener('click',async ()=>{
   const url=$('supabaseUrl').value.trim();
   const key=$('supabaseKey').value.trim();
@@ -1232,6 +1364,7 @@ $('connectSupabase').addEventListener('click',async ()=>{
   localStorage.setItem(SB_ANON_KEY,key);
   setSyncStatus('연결 확인 중...');
   await initSupabase();
+renderAuthState();
 });
 
 $('disconnectSupabase').addEventListener('click',()=>{

@@ -274,6 +274,8 @@
     .modal .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
     .danger{background:#7f1d1d!important;color:#fff!important;border:0!important}
     .match-actions{display:flex;gap:8px;margin-top:10px}
+    .delete-pick{display:none;width:100%;margin-top:10px;border:1px solid #7f1d1d;background:transparent;color:#f87171;border-radius:12px;padding:10px;font-weight:800}
+    .delete-mode .delete-pick{display:block}
     .match-actions button{flex:1}
   </style>
 </head>
@@ -342,7 +344,10 @@
           <div class="title">경기일정</div>
           <div class="sub" style="margin-top:4px">등록한 경기는 캘린더에 자동 표시됩니다.</div>
         </div>
-        <button id="newMatchBtn" class="secondary">+ 경기</button>
+        <div style="display:flex;gap:8px">
+          <button id="newMatchBtn" class="secondary">+ 경기</button>
+          <button id="deleteModeBtn" class="secondary" type="button">삭제</button>
+        </div>
       </div>
       <div id="matchList" class="list"></div>
     </section>
@@ -602,10 +607,19 @@ function renderMatches(){
         <button class="secondary edit-match" data-id="${m.id}">수정</button>
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
       </div>
+      <button class="delete-pick" data-id="${m.id}" type="button">이 경기 삭제</button>
     </div>`).join('')
     : '<div class="card"><div class="sub">등록된 경기가 없습니다.</div></div>';
 
   document.querySelectorAll('.edit-match').forEach(b=>b.addEventListener('click',()=>openMatchModal(Number(b.dataset.id))));
+  document.querySelectorAll('.delete-pick').forEach(b=>b.addEventListener('click',()=>{
+    const id=Number(b.dataset.id);
+    const m=state.matches.find(x=>x.id===id);
+    if(m && confirm(`${m.title} (${m.date}) 경기를 삭제할까요?`)){
+      state.matches=state.matches.filter(x=>x.id!==id);
+      renderMatches();
+    }
+  }));
   document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
     const [y,m,d]=b.dataset.date.split('-').map(Number);
     state.year=y;state.month=m-1;state.selected=b.dataset.date;
@@ -646,6 +660,13 @@ function closeMatchModal(){
 }
 
 $('newMatchBtn').addEventListener('click',()=>openMatchModal());
+let deleteMode=false;
+$('deleteModeBtn').addEventListener('click',()=>{
+  deleteMode=!deleteMode;
+  $('matchList').classList.toggle('delete-mode',deleteMode);
+  $('deleteModeBtn').textContent=deleteMode?'완료':'삭제';
+});
+
 $('closeMatchModal').addEventListener('click',closeMatchModal);
 $('matchModal').addEventListener('click',e=>{if(e.target===$('matchModal'))closeMatchModal();});
 

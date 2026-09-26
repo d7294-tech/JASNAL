@@ -346,6 +346,7 @@
           <span id="homeNextMatchDday" class="pill" style="display:none"></span>
         </div>
         <div id="homeNextMatchPlace" class="sub" style="margin-top:6px"></div>
+        <button id="homeVenueInfoBtn" class="secondary" type="button" style="width:100%;margin-top:10px;display:none">구장 정보</button>
         <div class="vote-grid">
           <button class="vote" data-vote="참석">참석<br><strong>12</strong></button>
           <button class="vote" data-vote="불참">불참<br><strong>3</strong></button>
@@ -585,6 +586,20 @@
 
 
 
+
+
+  <div id="venueInfoModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="venueInfoTitle">
+      <div class="row">
+        <div>
+          <h3 id="venueInfoTitle" style="margin-bottom:4px">구장 정보</h3>
+          <div id="venueInfoSub" class="sub"></div>
+        </div>
+        <button id="closeVenueInfoModal" class="secondary" type="button">닫기</button>
+      </div>
+      <div id="venueInfoBody" style="margin-top:12px"></div>
+    </div>
+  </div>
 
   <div id="venueModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="venueModalTitle">
@@ -1278,6 +1293,17 @@ $('voteListModal').addEventListener('click',e=>{
   if(e.target===$('voteListModal')) closeVoteListModal();
 });
 
+
+$('homeVenueInfoBtn').addEventListener('click',()=>{
+  const next=getNextMatch();
+  if(next)openVenueInfoForMatch(next);
+});
+
+$('closeVenueInfoModal').addEventListener('click',closeVenueInfoModal);
+$('venueInfoModal').addEventListener('click',e=>{
+  if(e.target===$('venueInfoModal'))closeVenueInfoModal();
+});
+
 document.querySelectorAll('.vote').forEach(btn=>{
   btn.addEventListener('click',async ()=>{
     const next=getNextMatch();
@@ -1908,6 +1934,40 @@ function getNextMatch(){
     .find(m => !isMatchClosed(m)) || null;
 }
 
+
+function findVenueForPlace(place){
+  if(!place)return null;
+  const exact=state.venues.find(v=>v.name===place);
+  if(exact)return exact;
+  return state.venues.find(v=>place.includes(v.name) || v.name.includes(place)) || null;
+}
+
+function openVenueInfoForMatch(match){
+  const v=findVenueForPlace(match?.place);
+  if(!v){
+    alert('등록된 구장 정보가 없습니다.');
+    return;
+  }
+
+  $('venueInfoTitle').textContent=v.name;
+  $('venueInfoSub').textContent=v.address||'';
+
+  const parts=[];
+  if(v.fee) parts.push(`<div class="list-item"><b>대관료</b><div class="sub" style="margin-top:5px">${Number(v.fee).toLocaleString()}원</div></div>`);
+  if(v.parking) parts.push(`<div class="list-item"><b>주차</b><div class="sub" style="margin-top:5px">${v.parking}</div></div>`);
+  if(v.memo) parts.push(`<div class="list-item"><b>메모</b><div class="sub" style="margin-top:5px">${v.memo}</div></div>`);
+  if(v.mapUrl) parts.push(`<a class="secondary" href="${v.mapUrl}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-top:10px">지도 보기</a>`);
+
+  $('venueInfoBody').innerHTML=parts.length?parts.join(''):'<div class="sub">추가 정보가 없습니다.</div>';
+  $('venueInfoModal').classList.add('show');
+  $('venueInfoModal').setAttribute('aria-hidden','false');
+}
+
+function closeVenueInfoModal(){
+  $('venueInfoModal').classList.remove('show');
+  $('venueInfoModal').setAttribute('aria-hidden','true');
+}
+
 function refreshHome(){
   const next=getNextMatch();
   const titleEl=$('homeNextMatchTitle');
@@ -1917,6 +1977,7 @@ function refreshHome(){
   if(!next){
     titleEl.textContent='등록된 경기가 없습니다.';
     placeEl.textContent='';
+    if($('homeVenueInfoBtn')) $('homeVenueInfoBtn').style.display='none';
     ddayEl.style.display='none';
     document.querySelectorAll('.vote').forEach(b=>{
       const strong=b.querySelector('strong');
@@ -1935,6 +1996,12 @@ function refreshHome(){
   const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
   titleEl.textContent=`${m}월 ${d}일 (${dow}) ${next.time}`;
   placeEl.textContent=next.place;
+  const venueBtn=$('homeVenueInfoBtn');
+  const matchedVenue=findVenueForPlace(next.place);
+  if(venueBtn){
+    venueBtn.style.display=matchedVenue?'block':'none';
+    venueBtn.dataset.matchId=next.id;
+  }
 
   const now=new Date();
   const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());

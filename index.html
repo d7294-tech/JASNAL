@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b5d42" />
+  <title>FC 우리풋살</title>
+  <style>
+    :root{
+      --green:#0b5d42;
+      --green-dark:#083b2d;
+      --green-soft:#e8f4ef;
+      --line:#e5e7eb;
+      --bg:#f7f8fa;
+      --card:#ffffff;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --morning:#e6f2ff;
+      --afternoon:#fff1d6;
+      --off:#f1f2f4;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",Arial,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .app{
+      width:100%;
+      max-width:520px;
+      margin:0 auto;
+      min-height:100vh;
+      background:var(--bg);
+      padding:14px 14px 86px;
+    }
+    .screen{display:none}
+    .screen.active{display:block}
+    .hero{
+      background:linear-gradient(135deg,var(--green),var(--green-dark));
+      color:#fff;
+      border-radius:20px;
+      padding:20px;
+      margin-bottom:14px;
+    }
+    .hero h1{font-size:22px;margin:0 0 4px}
+    .hero p{margin:0;opacity:.85;font-size:14px}
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:16px;
+      margin-bottom:14px;
+    }
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .title{font-size:18px;font-weight:800}
+    .sub{font-size:13px;color:var(--muted)}
+    .pill{
+      border-radius:999px;
+      background:var(--green-soft);
+      color:var(--green-dark);
+      padding:6px 10px;
+      font-size:12px;
+      font-weight:700;
+    }
+    .vote-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+      margin-top:14px;
+    }
+    .vote{
+      min-height:62px;
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:14px;
+      font-weight:700;
+    }
+    .vote.active{background:var(--green-soft);border-color:var(--green)}
+    .home-link{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:18px;
+      padding:16px;
+      margin-bottom:14px;
+    }
+    .nav{
+      position:fixed;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:0;
+      width:min(520px,100%);
+      background:#fff;
+      border-top:1px solid var(--line);
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      z-index:20;
+      padding-bottom:env(safe-area-inset-bottom);
+    }
+    .nav button{
+      min-height:64px;
+      border:0;
+      background:#fff;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .nav button.active{color:var(--green);font-weight:800}
+    .nav .ico{display:block;font-size:19px;margin-bottom:4px}
+    .month-head{
+      display:grid;
+      grid-template-columns:48px 1fr 48px;
+      align-items:center;
+      margin-bottom:10px;
+    }
+    .month-head button{
+      min-height:44px;
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:12px;
+      font-size:24px;
+    }
+    .month-head h2{margin:0;text-align:center;font-size:19px}
+    .calendar{
+      border:1px solid var(--line);
+      border-radius:18px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .week,.cal{
+      display:grid;
+      grid-template-columns:repeat(7,minmax(0,1fr));
+    }
+    .week div{
+      padding:9px 2px;
+      text-align:center;
+      font-size:12px;
+      font-weight:800;
+      background:#fafafa;
+      border-bottom:1px solid var(--line);
+    }
+    .sun,.sat{color:#dc2626}
+    .fri{color:#2563eb}
+    .day{
+      min-height:74px;
+      border:0;
+      border-right:1px solid var(--line);
+      border-bottom:1px solid var(--line);
+      background:#fff;
+      padding:4px;
+      text-align:left;
+      position:relative;
+    }
+    .day:nth-child(7n){border-right:0}
+    .day.blank{background:#fafafa}
+    .day.selected{outline:2px solid var(--green);outline-offset:-2px}
+    .day-num{font-size:12px;font-weight:800;margin-bottom:3px}
+    .tag{
+      display:block;
+      font-size:9px;
+      line-height:1.2;
+      border-radius:5px;
+      padding:2px 3px;
+      margin-top:2px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .morning{background:var(--morning)}
+    .afternoon{background:var(--afternoon)}
+    .off{background:var(--off)}
+    .dot{
+      position:absolute;top:6px;right:6px;
+      width:6px;height:6px;border-radius:50%;
+      background:var(--green);
+    }
+    .field{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      background:#fafafa;
+      border-radius:12px;
+      padding:10px 12px;
+      margin-top:8px;
+    }
+    .field select{
+      min-width:110px;
+      font-size:16px;
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:10px;
+      padding:10px;
+    }
+    .primary{
+      width:100%;
+      border:0;
+      border-radius:12px;
+      background:var(--green);
+      color:#fff;
+      padding:13px;
+      font-weight:800;
+      margin-top:12px;
+    }
+    .secondary{
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:700;
+    }
+    .list{display:grid;gap:10px}
+    .list-item{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:14px;
+    }
+    .form{
+      display:none;
+      margin-top:12px;
+    }
+    .form.show{display:block}
+    .form label{display:block;font-size:13px;font-weight:700;margin-top:10px}
+    .form input{
+      width:100%;
+      margin-top:5px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      font-size:16px;
+      background:#fff;
+    }
+    .search{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      font-size:16px;
+      background:#fff;
+      margin-bottom:10px;
+    }
+    .menu button{
+      width:100%;
+      border:0;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+      text-align:left;
+      padding:16px;
+    }
+    .menu button:last-child{border-bottom:0}
+    @media (max-width:380px){
+      .app{padding-left:10px;padding-right:10px}
+      .day{min-height:66px;padding:3px}
+      .tag{font-size:8px}
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section id="home" class="screen active">
+      <div class="hero">
+        <h1>FC 우리풋살</h1>
+        <p>함께 뛰는 즐거움</p>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="sub">다음 경기</div>
+            <div class="title" style="margin-top:4px">11월 21일 (토) 20:00</div>
+          </div>
+          <span class="pill">D-3</span>
+        </div>
+        <div class="sub" style="margin-top:6px">영종 풋살장 A구장</div>
+        <div class="vote-grid">
+          <button class="vote" data-vote="참석">참석<br><strong>12</strong></button>
+          <button class="vote" data-vote="불참">불참<br><strong>3</strong></button>
+          <button class="vote" data-vote="미정">미정<br><strong>5</strong></button>
+        </div>
+        <div id="voteMsg" class="sub" style="margin-top:10px">참석 여부를 선택하세요.</div>
+      </div>
+
+      <button class="home-link" data-go="calendar">
+        <div class="row">
+          <div>
+            <div class="title" style="font-size:16px">오늘 그룹 스케줄</div>
+            <div class="sub" style="margin-top:5px">1그룹 오전 · 2그룹 오후 · 3그룹 휴무</div>
+          </div>
+          <span style="font-size:22px">›</span>
+        </div>
+      </button>
+
+      <div class="card">
+        <div class="title" style="font-size:16px;margin-bottom:12px">공지사항</div>
+        <div class="row" style="margin-bottom:10px"><span>11월 정기 경기 안내</span><span class="sub">10.25</span></div>
+        <div class="row"><span>풋살장 변경 안내</span><span class="sub">10.20</span></div>
+      </div>
+    </section>
+
+    <section id="calendar" class="screen">
+      <div class="month-head">
+        <button id="prevMonth" aria-label="이전 달">‹</button>
+        <h2 id="monthTitle"></h2>
+        <button id="nextMonth" aria-label="다음 달">›</button>
+      </div>
+
+      <div class="calendar">
+        <div class="week">
+          <div class="sun">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div class="fri">금</div><div class="sat">토</div>
+        </div>
+        <div id="calendarGrid" class="cal"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="row">
+          <div>
+            <div class="sub">선택 날짜</div>
+            <div id="selectedDate" class="title" style="font-size:17px;margin-top:3px"></div>
+          </div>
+          <button id="addEvent" class="secondary">+ 일정</button>
+        </div>
+
+        <div class="field"><strong>1그룹</strong><select id="g1"><option>오전</option><option>오후</option><option>휴무</option><option>미정</option></select></div>
+        <div class="field"><strong>2그룹</strong><select id="g2"><option>오전</option><option>오후</option><option>휴무</option><option>미정</option></select></div>
+        <div class="field"><strong>3그룹</strong><select id="g3"><option>오전</option><option>오후</option><option>휴무</option><option>미정</option></select></div>
+
+        <button id="saveSchedule" class="primary">저장</button>
+        <div id="dayEvents" class="sub" style="margin-top:12px">등록된 일정이 없습니다.</div>
+      </div>
+    </section>
+
+    <section id="matches" class="screen">
+      <div class="row" style="margin-bottom:12px">
+        <div class="title">경기일정</div>
+        <button id="newMatchBtn" class="secondary">+ 경기</button>
+      </div>
+      <div id="matchList" class="list"></div>
+
+      <form id="matchForm" class="card form">
+        <label>경기명<input id="matchTitle" value="정기 경기" required></label>
+        <label>날짜<input id="matchDate" type="date" value="2026-11-21" required></label>
+        <label>시간<input id="matchTime" type="time" value="20:00" required></label>
+        <label>장소<input id="matchPlace" value="영종 풋살장 A구장" required></label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+    </section>
+
+    <section id="members" class="screen">
+      <div class="row" style="margin-bottom:12px">
+        <div class="title">회원</div>
+        <button id="addMember" class="secondary">+ 회원</button>
+      </div>
+      <input id="memberSearch" class="search" placeholder="이름 검색">
+      <div id="memberList" class="list"></div>
+    </section>
+
+    <section id="more" class="screen">
+      <div class="card">
+        <div class="title">FC 우리풋살</div>
+        <div class="sub" style="margin-top:5px">회원 23명</div>
+      </div>
+      <div class="card menu" style="padding:0">
+        <button>구장 정보</button>
+        <button>회비 관리</button>
+        <button>공지사항</button>
+        <button>설정</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="nav">
+    <button class="nav-btn active" data-screen="home"><span class="ico">⌂</span>홈</button>
+    <button class="nav-btn" data-screen="calendar"><span class="ico">▣</span>캘린더</button>
+    <button class="nav-btn" data-screen="matches"><span class="ico">⚽</span>경기</button>
+    <button class="nav-btn" data-screen="members"><span class="ico">♙</span>회원</button>
+    <button class="nav-btn" data-screen="more"><span class="ico">•••</span>더보기</button>
+  </nav>
+
+<script>
+const state={
+  year:2026,
+  month:10,
+  selected:'2026-11-01',
+  schedule:{
+    '2026-11-01':['오전','오후','휴무'],
+    '2026-11-08':['오전','오후','휴무'],
+    '2026-11-15':['오전','오후','휴무'],
+    '2026-11-22':['오전','오후','휴무'],
+    '2026-11-29':['오전','오후','휴무']
+  },
+  events:{
+    '2026-11-21':['정기 경기 20:00 · 영종 풋살장 A구장']
+  },
+  matches:[
+    {title:'정기 경기',date:'2026-11-21',time:'20:00',place:'영종 풋살장 A구장'}
+  ],
+  members:['김민수','이준호','박지훈','최영민','정우현','한지수']
+};
+
+const pad=n=>String(n).padStart(2,'0');
+const dateKey=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
+const $=id=>document.getElementById(id);
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+}
+document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.screen)));
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>showScreen(b.dataset.go)));
+
+document.querySelectorAll('.vote').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.vote').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active');
+    $('voteMsg').textContent=`${btn.dataset.vote}으로 선택했습니다.`;
+  });
+});
+
+function classFor(v){
+  if(v==='오전') return 'morning';
+  if(v==='오후') return 'afternoon';
+  if(v==='휴무') return 'off';
+  return '';
+}
+
+function renderCalendar(){
+  $('monthTitle').textContent=`${state.year}년 ${state.month+1}월`;
+  const grid=$('calendarGrid');
+  grid.innerHTML='';
+  const first=new Date(Date.UTC(state.year,state.month,1)).getUTCDay();
+  const days=new Date(Date.UTC(state.year,state.month+1,0)).getUTCDate();
+
+  for(let i=0;i<first;i++){
+    const blank=document.createElement('div');
+    blank.className='day blank';
+    grid.appendChild(blank);
+  }
+
+  for(let d=1;d<=days;d++){
+    const k=dateKey(state.year,state.month,d);
+    const dow=new Date(Date.UTC(state.year,state.month,d)).getUTCDay();
+    const btn=document.createElement('button');
+    btn.className='day'+(k===state.selected?' selected':'');
+    btn.type='button';
+
+    const num=document.createElement('div');
+    num.className='day-num';
+    if(dow===0||dow===6) num.classList.add('sun');
+    if(dow===5) num.classList.add('fri');
+    num.textContent=d;
+    btn.appendChild(num);
+
+    (state.schedule[k]||[]).forEach((v,i)=>{
+      if(v==='미정') return;
+      const tag=document.createElement('span');
+      tag.className='tag '+classFor(v);
+      tag.textContent=`${i+1}G ${v}`;
+      btn.appendChild(tag);
+    });
+
+    if(state.events[k]?.length){
+      const dot=document.createElement('span');
+      dot.className='dot';
+      btn.appendChild(dot);
+    }
+
+    btn.addEventListener('click',()=>selectDate(k));
+    grid.appendChild(btn);
+  }
+}
+
+function selectDate(k){
+  state.selected=k;
+  renderCalendar();
+  const [y,m,d]=k.split('-').map(Number);
+  $('selectedDate').textContent=`${y}.${pad(m)}.${pad(d)}`;
+  const vals=state.schedule[k]||['미정','미정','미정'];
+  $('g1').value=vals[0];
+  $('g2').value=vals[1];
+  $('g3').value=vals[2];
+  renderDayEvents();
+}
+
+function renderDayEvents(){
+  const list=state.events[state.selected]||[];
+  $('dayEvents').innerHTML=list.length
+    ? list.map(v=>`<div style="background:#fafafa;border-radius:10px;padding:10px;margin-top:6px">📌 ${v}</div>`).join('')
+    : '등록된 일정이 없습니다.';
+}
+
+$('prevMonth').addEventListener('click',()=>{
+  state.month--;
+  if(state.month<0){state.month=11;state.year--;}
+  selectDate(dateKey(state.year,state.month,1));
+});
+
+$('nextMonth').addEventListener('click',()=>{
+  state.month++;
+  if(state.month>11){state.month=0;state.year++;}
+  selectDate(dateKey(state.year,state.month,1));
+});
+
+$('saveSchedule').addEventListener('click',()=>{
+  state.schedule[state.selected]=[$('g1').value,$('g2').value,$('g3').value];
+  renderCalendar();
+  $('saveSchedule').textContent='저장 완료 ✓';
+  setTimeout(()=>$('saveSchedule').textContent='저장',900);
+});
+
+$('addEvent').addEventListener('click',()=>{
+  const txt=prompt('일정 내용을 입력하세요.');
+  if(!txt || !txt.trim()) return;
+  (state.events[state.selected]||(state.events[state.selected]=[])).push(txt.trim());
+  renderCalendar();
+  renderDayEvents();
+});
+
+function renderMatches(){
+  $('matchList').innerHTML=state.matches.map(m=>`
+    <div class="list-item">
+      <div style="font-weight:800">${m.title}</div>
+      <div class="sub" style="margin-top:5px">${m.date} · ${m.time}</div>
+      <div class="sub" style="margin-top:3px">${m.place}</div>
+    </div>`).join('');
+}
+$('newMatchBtn').addEventListener('click',()=>$('matchForm').classList.toggle('show'));
+$('matchForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const item={
+    title:$('matchTitle').value.trim(),
+    date:$('matchDate').value,
+    time:$('matchTime').value,
+    place:$('matchPlace').value.trim()
+  };
+  if(!item.title||!item.date||!item.time||!item.place) return;
+  state.matches.push(item);
+  (state.events[item.date]||(state.events[item.date]=[])).push(`${item.title} ${item.time} · ${item.place}`);
+  renderMatches();
+  renderCalendar();
+  $('matchForm').classList.remove('show');
+});
+
+function renderMembers(filter=''){
+  const f=filter.trim().toLowerCase();
+  const arr=state.members.filter(n=>n.toLowerCase().includes(f));
+  $('memberList').innerHTML=arr.length
+    ? arr.map(n=>`<div class="list-item" style="font-weight:800">${n}</div>`).join('')
+    : '<div class="sub">검색 결과가 없습니다.</div>';
+}
+$('memberSearch').addEventListener('input',e=>renderMembers(e.target.value));
+$('addMember').addEventListener('click',()=>{
+  const name=prompt('회원 이름을 입력하세요.');
+  if(!name||!name.trim()) return;
+  state.members.push(name.trim());
+  renderMembers($('memberSearch').value);
+});
+
+renderCalendar();
+selectDate(state.selected);
+renderMatches();
+renderMembers();
+</script>
+</body>
+</html>

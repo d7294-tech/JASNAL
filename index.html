@@ -812,7 +812,7 @@ const state={
 const STORAGE_KEY='jasnal_state_v1';
 
 const DEFAULT_SUPABASE_URL='https://atjskcglihxpgcpekkts.supabase.co';
-const DEFAULT_SUPABASE_KEY='sb_publishable_ccv1ZRcZw6KFmL4xa7f1aw_DhMo1vsI';
+const DEFAULT_SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0anNrY2dsaWh4cGdjcGVra3RzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzOTUxMTMsImV4cCI6MjEwNTk3MTExM30.V9f4cpZ_-n3pu47i8IsjX5DdiYuKovxXy4siPsjH9jM';
 const SB_URL_KEY='jasnal_supabase_url';
 const SB_ANON_KEY='jasnal_supabase_anon';
 const DEVICE_KEY='jasnal_device_id';
@@ -853,11 +853,12 @@ function setSyncStatus(text, ok=null){
 }
 
 async function initSupabase(){
-  const url=localStorage.getItem(SB_URL_KEY)||DEFAULT_SUPABASE_URL;
-  const key=localStorage.getItem(SB_ANON_KEY)||DEFAULT_SUPABASE_KEY;
+  const url=DEFAULT_SUPABASE_URL;
+  const key=DEFAULT_SUPABASE_KEY;
 
-  if(!localStorage.getItem(SB_URL_KEY)) localStorage.setItem(SB_URL_KEY,url);
-  if(!localStorage.getItem(SB_ANON_KEY)) localStorage.setItem(SB_ANON_KEY,key);
+  // Always refresh any previously cached wrong credentials on this device.
+  localStorage.setItem(SB_URL_KEY,url);
+  localStorage.setItem(SB_ANON_KEY,key);
 
   if($('supabaseUrl'))$('supabaseUrl').value=url;
   if($('supabaseKey'))$('supabaseKey').value=key;
@@ -2556,8 +2557,6 @@ $('connectSupabase').addEventListener('click',async ()=>{
   const url=$('supabaseUrl').value.trim();
   const key=$('supabaseKey').value.trim();
   if(!url || !key){ setSyncStatus('Project URL과 Key를 입력하세요.',false); return; }
-  localStorage.setItem(SB_URL_KEY,url);
-  localStorage.setItem(SB_ANON_KEY,key);
   setSyncStatus('연결 확인 중...');
   await initSupabase();
 setInterval(()=>{

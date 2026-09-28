@@ -84,7 +84,12 @@
       background:#fff;
       border-radius:14px;
       font-weight:700;
+      text-align:center;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
+    .vote strong{display:inline-block;text-align:center;min-width:1ch}
     .vote.active{background:var(--green-soft);border-color:var(--green)}
     .home-link{
       width:100%;
@@ -325,8 +330,9 @@
     .match-actions{display:flex;gap:8px;margin-top:10px}
     .delete-pick{display:none;width:100%;margin-top:10px;border:1px solid #7f1d1d;background:transparent;color:#f87171;border-radius:12px;padding:10px;font-weight:800}
     .delete-mode .delete-pick{display:block}
-    .attendance-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-    .attendance-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 4px;font-size:12px;font-weight:800}
+    .attendance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+    .attendance-btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 4px;font-size:12px;font-weight:800;text-align:center;display:flex;align-items:center;justify-content:center;min-height:56px}
+    .attendance-btn strong{display:inline-block;text-align:center;min-width:1ch}
     .attendance-btn.active{background:var(--green-soft);border-color:var(--green);color:var(--green-dark)}
     .attendance-btn:disabled{opacity:.55;cursor:not-allowed}
     .attendance-note{font-size:11px;color:var(--muted);margin-top:7px}
@@ -3026,6 +3032,15 @@ function setMatchListMode(mode){
 $('upcomingMatchTab').addEventListener('click',()=>setMatchListMode('upcoming'));
 $('pastMatchTab').addEventListener('click',()=>setMatchListMode('past'));
 
+
+function getMatchNoVoteCount(match){
+  const activeMemberCount=state.members.filter(m=>m.status==='활동중').length;
+  const yes=Number(match?.attendance?.yes||0);
+  const no=Number(match?.attendance?.no||0);
+  const maybe=Number(match?.attendance?.maybe||0);
+  return Math.max(0,activeMemberCount-yes-no-maybe);
+}
+
 function renderMatches(){
   rebuildEventsFromMatches();
   renderCalendar();
@@ -3048,9 +3063,10 @@ function renderMatches(){
         <span class="pill">${isMatchClosed(m)?'마감':'경기'}</span>
       </div>
       <div class="attendance-grid">
-        <button class="attendance-btn ${m.attendance?.myVote==='yes'?'active':''}" data-id="${m.id}" data-vote="yes" type="button" ${isMatchClosed(m)?'disabled':''}>참석<br>${m.attendance?.yes||0}</button>
-        <button class="attendance-btn ${m.attendance?.myVote==='no'?'active':''}" data-id="${m.id}" data-vote="no" type="button" ${isMatchClosed(m)?'disabled':''}>불참<br>${m.attendance?.no||0}</button>
-        <button class="attendance-btn ${m.attendance?.myVote==='maybe'?'active':''}" data-id="${m.id}" data-vote="maybe" type="button" ${isMatchClosed(m)?'disabled':''}>미정<br>${m.attendance?.maybe||0}</button>
+        <button class="attendance-btn ${m.attendance?.myVote==='yes'?'active':''}" data-id="${m.id}" data-vote="yes" type="button" ${isMatchClosed(m)?'disabled':''}><span>참석<br><strong>${m.attendance?.yes||0}</strong></span></button>
+        <button class="attendance-btn ${m.attendance?.myVote==='no'?'active':''}" data-id="${m.id}" data-vote="no" type="button" ${isMatchClosed(m)?'disabled':''}><span>불참<br><strong>${m.attendance?.no||0}</strong></span></button>
+        <button class="attendance-btn ${m.attendance?.myVote==='maybe'?'active':''}" data-id="${m.id}" data-vote="maybe" type="button" ${isMatchClosed(m)?'disabled':''}><span>미정<br><strong>${m.attendance?.maybe||0}</strong></span></button>
+        <div class="attendance-btn" style="cursor:default"><span>미투표<br><strong>${getMatchNoVoteCount(m)}</strong></span></div>
       </div>
       <div class="attendance-note">${isMatchClosed(m)
         ? '경기 종료 · 투표 마감'

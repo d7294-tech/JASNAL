@@ -1039,7 +1039,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v45</span></div>
+      <div class="jas-version">APP VERSION <span>v46</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1274,7 +1274,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v45</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v46</div>
       </div>
     </section>
 
@@ -3622,15 +3622,47 @@ $('duesModal').addEventListener('click',e=>{
 $('duesSettingsForm').addEventListener('submit',async e=>{
   e.preventDefault();
   if(!isAdmin())return;
+
+  const newAmount=Math.max(0,Number($('duesAmount').value||0));
+  const newDueDay=Math.min(31,Math.max(1,Number($('duesDueDay').value||10)));
+  const oldAmount=Number(state.duesSettings?.amount||0);
+
   state.duesSettings={
-    amount:Math.max(0,Number($('duesAmount').value||0)),
-    dueDay:Math.min(31,Math.max(1,Number($('duesDueDay').value||10)))
+    ...state.duesSettings,
+    amount:newAmount,
+    dueDay:newDueDay,
+    openingBalance:Number(state.duesSettings?.openingBalance||0),
+    openingDate:String(state.duesSettings?.openingDate||'')
   };
+
+  // 월 회비 변경 시 아직 납부하지 않은 기존 월도 새 회비 금액으로 재계산.
+  // 이미 납부 완료된 과거 내역은 당시 금액을 보존한다.
+  const changedUnpaid=[];
+  if(newAmount!==oldAmount){
+    for(const row of state.duesPayments){
+      if(!row.paid && Number(row.amount||0)!==newAmount){
+        row.amount=newAmount;
+        changedUnpaid.push(row);
+      }
+    }
+  }
+
   saveState();
-  try{ await remoteSaveDuesSettings(state.duesSettings); }catch(err){ setSyncStatus('회비 설정 동기화 실패: '+err.message,false); }
+
+  try{
+    await remoteSaveDuesSettings(state.duesSettings);
+    if(remoteReady && changedUnpaid.length){
+      await Promise.all(changedUnpaid.map(row=>remoteUpsertDuesPayment(row)));
+    }
+  }catch(err){
+    setSyncStatus('회비 설정 동기화 실패: '+err.message,false);
+  }
+
   $('duesModal').classList.remove('show');
   $('duesModal').setAttribute('aria-hidden','true');
   renderDues();
+  renderMemberDuesSummary();
+  renderFinanceLedger();
 });
 
 function formatNoticeDate(ts){
@@ -5033,7 +5065,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=45',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=46',{
         updateViaCache:'none'
       });
 

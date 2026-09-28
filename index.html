@@ -1039,7 +1039,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v44</span></div>
+      <div class="jas-version">APP VERSION <span>v45</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1274,7 +1274,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v44</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v45</div>
       </div>
     </section>
 
@@ -1346,7 +1346,10 @@ textarea{
             <div class="title" style="font-size:16px">회비 사용내역</div>
             <div class="sub" style="margin-top:4px">월별 수입·지출 기록 및 현재 잔액 관리</div>
           </div>
-          <button id="addFinanceTxnBtn" class="secondary" type="button">+ 내역</button>
+          <div style="display:flex;gap:6px">
+            <button id="setOpeningBalanceBtn" class="secondary" type="button">잔액 설정</button>
+            <button id="addFinanceTxnBtn" class="secondary" type="button">+ 내역</button>
+          </div>
         </div>
 
         <div class="finance-summary">
@@ -1810,7 +1813,7 @@ const state={
   events:{},
   notices:[],
   duesPayments:[],
-  duesSettings:{amount:30000,dueDay:10},
+  duesSettings:{amount:30000,dueDay:10,openingBalance:0,openingDate:''},
   financeTransactions:[],
   settlementLocks:{},
   venues:[],
@@ -2000,6 +2003,9 @@ function renderAuthState(){
 }
 
 function applyRoleVisibility(){
+  const openingBtn=$('setOpeningBalanceBtn');
+  if(openingBtn)openingBtn.style.display=isAdmin()?'inline-block':'none';
+
   const approved=currentMember?.status==='활동중';
   const role=approved ? String(currentMember?.role||'회원').trim() : '회원';
   const adminOnly=role==='관리자';
@@ -2221,7 +2227,9 @@ async function loadRemoteState(){
     if(clubSettings?.value){
       state.duesSettings={
         amount:Number(clubSettings.value.amount||30000),
-        dueDay:Number(clubSettings.value.dueDay||10)
+        dueDay:Number(clubSettings.value.dueDay||10),
+        openingBalance:Number(clubSettings.value.openingBalance||0),
+        openingDate:String(clubSettings.value.openingDate||'')
       };
     }
 
@@ -2352,6 +2360,48 @@ async function remoteUpsertDuesPayment(item){
   if(error)throw error;
 }
 
+
+async function setOpeningBalance(){
+  if(!isAdmin()){
+    alert('관리자만 기초 잔액을 설정할 수 있습니다.');
+    return;
+  }
+  const current=Number(state.duesSettings?.openingBalance||0);
+  const amountText=prompt('기초 잔액을 입력하세요. (원)', String(current));
+  if(amountText===null)return;
+  const amount=Number(String(amountText).replace(/,/g,'').trim());
+  if(!Number.isFinite(amount) || amount<0){
+    alert('올바른 금액을 입력하세요.');
+    return;
+  }
+
+  const defaultDate=state.duesSettings?.openingDate || `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-01`;
+  const dateText=prompt('기초 잔액 기준일을 입력하세요. (YYYY-MM-DD)', defaultDate);
+  if(dateText===null)return;
+  const date=String(dateText).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){
+    alert('날짜를 YYYY-MM-DD 형식으로 입력하세요.');
+    return;
+  }
+
+  const next={
+    ...state.duesSettings,
+    openingBalance:Math.round(amount),
+    openingDate:date
+  };
+
+  try{
+    await remoteSaveDuesSettings(next);
+    state.duesSettings=next;
+    saveState();
+    renderDues();
+    renderMemberDuesSummary();
+    alert(`기초 잔액 ${Math.round(amount).toLocaleString()}원이 설정되었습니다.`);
+  }catch(err){
+    alert('잔액 설정 실패: '+(err?.message||err));
+  }
+}
+
 async function remoteSaveDuesSettings(settings){
   if(!remoteReady)return;
   const {error}=await supabase.from('club_settings').upsert({
@@ -2448,7 +2498,12 @@ function loadState(){
     }
     if(Array.isArray(saved.notices)) state.notices=saved.notices;
     if(Array.isArray(saved.duesPayments)) state.duesPayments=saved.duesPayments;
-    if(saved.duesSettings) state.duesSettings=saved.duesSettings;
+    if(saved.duesSettings) state.duesSettings={
+      amount:Number(saved.duesSettings.amount||30000),
+      dueDay:Number(saved.duesSettings.dueDay||10),
+      openingBalance:Number(saved.duesSettings.openingBalance||0),
+      openingDate:String(saved.duesSettings.openingDate||'')
+    };
     if(Array.isArray(saved.financeTransactions)) state.financeTransactions=saved.financeTransactions;
     if(saved.settlementLocks && typeof saved.settlementLocks==='object') state.settlementLocks=saved.settlementLocks;
     if(Array.isArray(saved.venues)) state.venues=saved.venues;
@@ -3047,7 +3102,7 @@ function calculateFinanceSummary(monthKey=currentMonthKey()){
     .reduce((sum,t)=>sum+Number(t.amount||0),0);
 
   return {
-    balance:collected+otherIncome-expenses,
+    balance:Number(state.duesSettings?.openingBalance||0)+collected+otherIncome-expenses,
     monthIncome:monthPaid+monthIncomeExtra,
     monthExpense
   };
@@ -3076,7 +3131,10 @@ function calculateBalanceBeforeMonth(monthKey){
     .filter(t=>t.type==='expense' && String(t.date||'').slice(0,7) < monthKey)
     .reduce((sum,t)=>sum+Number(t.amount||0),0);
 
-  return dues + income - expense;
+  const openingBalance=Number(state.duesSettings?.openingBalance||0);
+  const openingDate=String(state.duesSettings?.openingDate||'');
+  const openingApplies=!openingDate || openingDate.slice(0,7) < monthKey;
+  return (openingApplies?openingBalance:0) + dues + income - expense;
 }
 
 function calculateMonthlySettlement(monthKey){
@@ -3116,6 +3174,8 @@ function renderMonthlySettlement(monthKey){
     $('toggleSettlementLockBtn').textContent=locked?'마감 해제':'정산 마감';
     $('toggleSettlementLockBtn').style.display=isAdmin()?'inline-block':'none';
   }
+
+$('setOpeningBalanceBtn')?.addEventListener('click',setOpeningBalance);
   if($('addFinanceTxnBtn'))$('addFinanceTxnBtn').disabled=locked;
   const x=calculateMonthlySettlement(monthKey);
   const [y,m]=monthKey.split('-');
@@ -4973,7 +5033,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=44',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=45',{
         updateViaCache:'none'
       });
 

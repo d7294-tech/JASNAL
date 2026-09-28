@@ -577,7 +577,7 @@
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA · v34</div>
+        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA · v35</div>
       </div>
     </section>
 
@@ -765,6 +765,18 @@
         <div id="syncStatus" class="sync-status">현재: 이 기기에만 저장</div>
       </div>
 
+
+
+      <div id="backupAdminCard" class="card" style="display:none">
+        <div class="title" style="font-size:16px">데이터 백업 / 복구</div>
+        <div class="sub" style="margin-top:5px">Supabase 운영 데이터를 JSON 파일로 백업하거나 복원합니다. 관리자만 사용할 수 있습니다.</div>
+        <div class="auth-grid" style="margin-top:12px">
+          <button id="exportBackupBtn" class="secondary" type="button">백업 저장</button>
+          <button id="importBackupBtn" class="secondary" type="button">백업 복원</button>
+        </div>
+        <input id="backupFileInput" type="file" accept="application/json,.json" style="display:none">
+        <div id="backupStatus" class="sync-status"></div>
+      </div>
 
       <div class="card menu" style="padding:0;margin-top:12px">
         <button id="openVenuesBtn" type="button">구장 정보</button>
@@ -1268,6 +1280,7 @@ function applyRoleVisibility(){
   // Cloud connection credentials/settings: administrator only.
   const cloudBox=$('cloudAdminBox');
   if(cloudBox) cloudBox.style.display=adminOnly?'block':'none';
+  if($('backupAdminCard')) $('backupAdminCard').style.display=adminOnly?'block':'none';
 
   // Other management areas: 운영진/관리자.
   if($('addMember')) $('addMember').style.display=adminOnly?'inline-block':'none';
@@ -1296,6 +1309,91 @@ function subscribeRealtime(){
 function scheduleRemoteReload(){
   clearTimeout(remoteReloadTimer);
   remoteReloadTimer=setTimeout(()=>loadRemoteState(),250);
+}
+
+
+function setBackupStatus(text,ok=null){
+  const el=$('backupStatus');
+  if(!el)return;
+  el.textContent=text;
+  el.classList.remove('sync-ok','sync-bad');
+  if(ok===true)el.classList.add('sync-ok');
+  if(ok===false)el.classList.add('sync-bad');
+}
+
+function downloadJsonFile(filename,data){
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function createCloudBackup(){
+  if(!isAdmin())throw new Error('관리자만 백업할 수 있습니다.');
+  if(!supabase || !remoteReady)throw new Error('Cloud 연결 후 사용할 수 있습니다.');
+
+  const tables=[
+    'matches','members','votes','notices','dues_payments',
+    'club_settings','venues','finance_transactions','settlement_locks'
+  ];
+
+  const results=await Promise.all(
+    tables.map(async table=>{
+      const {data,error}=await supabase.from(table).select('*');
+      if(error)throw new Error(`${table}: ${error.message}`);
+      return [table,data||[]];
+    })
+  );
+
+  return {
+    format:'JASNAL_BACKUP',
+    version:1,
+    appVersion:'v35',
+    exportedAt:new Date().toISOString(),
+    projectRef:'atjskcglihxpgcpekkts',
+    data:Object.fromEntries(results)
+  };
+}
+
+function validateBackupFile(backup){
+  if(!backup || backup.format!=='JASNAL_BACKUP')throw new Error('JASNAL 백업 파일이 아닙니다.');
+  if(Number(backup.version)!==1)throw new Error('지원하지 않는 백업 버전입니다.');
+  if(!backup.data || typeof backup.data!=='object')throw new Error('백업 데이터가 없습니다.');
+
+  const required=[
+    'matches','members','votes','notices','dues_payments',
+    'club_settings','venues','finance_transactions','settlement_locks'
+  ];
+  for(const key of required){
+    if(!Array.isArray(backup.data[key]))throw new Error(`${key} 데이터가 올바르지 않습니다.`);
+  }
+
+  if(currentUser?.id){
+    const me=String(currentUser.id);
+    const hasCurrentAdmin=backup.data.members.some(m=>
+      String(m.auth_user_id||'')===me &&
+      String(m.role||'').trim()==='관리자' &&
+      String(m.status||'').trim()==='활동중'
+    );
+    if(!hasCurrentAdmin){
+      throw new Error('현재 관리자 계정이 백업의 활동중 관리자 목록에 없어 복원을 중단했습니다.');
+    }
+  }
+}
+
+async function restoreCloudBackup(backup){
+  if(!isAdmin())throw new Error('관리자만 복원할 수 있습니다.');
+  if(!supabase || !remoteReady)throw new Error('Cloud 연결 후 사용할 수 있습니다.');
+  validateBackupFile(backup);
+
+  const {data,error}=await supabase.rpc('restore_jasnal_backup',{payload:backup.data});
+  if(error)throw error;
+  return data;
 }
 
 async function loadRemoteState(){
@@ -3943,6 +4041,66 @@ $('disconnectSupabase').addEventListener('click',()=>{
 });
 
 
+
+if($('exportBackupBtn'))$('exportBackupBtn').addEventListener('click',async ()=>{
+  try{
+    setBackupStatus('백업 데이터를 불러오는 중...');
+    const backup=await createCloudBackup();
+    const d=new Date();
+    const stamp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+    downloadJsonFile(`JASNAL_BACKUP_${stamp}.json`,backup);
+    setBackupStatus('백업 파일 저장 완료',true);
+  }catch(err){
+    console.error(err);
+    setBackupStatus('백업 실패: '+(err?.message||String(err)),false);
+  }
+});
+
+if($('importBackupBtn'))$('importBackupBtn').addEventListener('click',()=>{
+  if(!isAdmin()){
+    alert('관리자만 복원할 수 있습니다.');
+    return;
+  }
+  $('backupFileInput').value='';
+  $('backupFileInput').click();
+});
+
+if($('backupFileInput'))$('backupFileInput').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];
+  if(!file)return;
+
+  try{
+    const backup=JSON.parse(await file.text());
+    validateBackupFile(backup);
+
+    const summary=[
+      `회원 ${backup.data.members.length}명`,
+      `경기 ${backup.data.matches.length}건`,
+      `투표 ${backup.data.votes.length}건`,
+      `공지 ${backup.data.notices.length}건`,
+      `회비 납부 ${backup.data.dues_payments.length}건`,
+      `회비 사용 ${backup.data.finance_transactions.length}건`,
+      `구장 ${backup.data.venues.length}건`
+    ].join('\n');
+
+    if(!confirm(`백업 데이터를 복원할까요?\n\n${summary}\n\n현재 운영 데이터는 백업 파일 내용으로 교체됩니다.`))return;
+
+    if(prompt('복원을 진행하려면 RESTORE 를 입력하세요.')!=='RESTORE'){
+      setBackupStatus('복원이 취소되었습니다.');
+      return;
+    }
+
+    setBackupStatus('데이터 복원 중... 페이지를 닫지 마세요.');
+    await restoreCloudBackup(backup);
+    await loadRemoteState();
+    setBackupStatus('백업 복원 완료',true);
+    alert('복원이 완료되었습니다.');
+  }catch(err){
+    console.error(err);
+    setBackupStatus('복원 실패: '+(err?.message||String(err)),false);
+  }
+});
+
 let deferredInstallPrompt=null;
 
 function getInstallHelpText(){
@@ -3995,7 +4153,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=34',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=35',{
         updateViaCache:'none'
       });
 

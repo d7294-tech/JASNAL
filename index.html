@@ -278,6 +278,19 @@
     .dues-status.unpaid{background:#fef2f2;color:#b91c1c}
     .dues-actions{display:flex;gap:8px;margin-top:10px}
     .dues-actions button{flex:1}
+    .finance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+    .finance-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+    .finance-stat b{display:block;font-size:17px;margin-top:4px}
+    .finance-balance{color:var(--green-dark)}
+    .finance-income{color:#059669}
+    .finance-expense{color:#dc2626}
+    .ledger-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+    .ledger-amount{font-weight:800}
+    .ledger-amount.income{color:#059669}
+    .ledger-amount.expense{color:#dc2626}
+    .ledger-meta{font-size:11px;color:var(--muted);margin-top:4px}
+    .ledger-actions{display:flex;gap:8px;margin-top:10px}
+    .ledger-actions button{flex:1}
     .venue-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
     .venue-title{font-weight:800;font-size:16px}
     .venue-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
@@ -460,6 +473,11 @@
           <div class="dues-stat"><span class="sub">미납</span><b id="memberUnpaidCount" class="dues-unpaid">0</b></div>
           <div class="dues-stat"><span class="sub">총원</span><b id="memberTargetCount" class="dues-total">0</b></div>
         </div>
+        <div class="finance-summary">
+          <div class="finance-stat"><span class="sub">현재 총회비</span><b id="memberCurrentBalance" class="finance-balance">0원</b></div>
+          <div class="finance-stat"><span class="sub">이번달 수입</span><b id="memberMonthIncome" class="finance-income">0원</b></div>
+          <div class="finance-stat"><span class="sub">이번달 지출</span><b id="memberMonthExpense" class="finance-expense">0원</b></div>
+        </div>
 
         <select id="memberDuesPaidFilter" class="secondary" style="width:100%;min-height:42px;margin-bottom:10px">
           <option value="">납부 상태 전체</option>
@@ -551,6 +569,33 @@
         <div id="approvalList" class="list" style="margin-top:10px"></div>
       </div>
       <div id="duesList" class="list"></div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="row" style="margin-bottom:10px">
+          <div>
+            <div class="title" style="font-size:16px">회비 사용내역</div>
+            <div class="sub" style="margin-top:4px">월별 수입·지출 기록 및 현재 잔액 관리</div>
+          </div>
+          <button id="addFinanceTxnBtn" class="secondary" type="button">+ 내역</button>
+        </div>
+
+        <div class="finance-summary">
+          <div class="finance-stat"><span class="sub">현재 총회비</span><b id="financeCurrentBalance" class="finance-balance">0원</b></div>
+          <div class="finance-stat"><span class="sub">월 수입</span><b id="financeMonthIncome" class="finance-income">0원</b></div>
+          <div class="finance-stat"><span class="sub">월 지출</span><b id="financeMonthExpense" class="finance-expense">0원</b></div>
+        </div>
+
+        <div class="row" style="margin-bottom:10px">
+          <select id="financeMonthSelect" class="secondary" style="flex:1;min-height:44px"></select>
+          <select id="financeTypeFilter" class="secondary" style="flex:1;min-height:44px">
+            <option value="">전체</option>
+            <option value="income">수입</option>
+            <option value="expense">지출</option>
+          </select>
+        </div>
+
+        <div id="financeLedgerList" class="list"></div>
+      </div>
     </section>
 
 <section id="notices" class="screen">
@@ -669,6 +714,40 @@
       </form>
       <div id="venueDeleteWrap" style="display:none">
         <button id="deleteVenueBtn" class="primary danger" type="button">구장 삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="financeTxnModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="financeTxnModalTitle">
+      <div class="row">
+        <h3 id="financeTxnModalTitle">회비 사용내역 등록</h3>
+        <button id="closeFinanceTxnModal" class="secondary" type="button">닫기</button>
+      </div>
+      <form id="financeTxnForm">
+        <input id="financeTxnId" type="hidden">
+        <label>구분
+          <select id="financeTxnType" class="search" style="margin-top:5px">
+            <option value="expense">지출</option>
+            <option value="income">기타수입</option>
+          </select>
+        </label>
+        <label>일자<input id="financeTxnDate" type="date" required></label>
+        <label>항목
+          <select id="financeTxnCategory" class="search" style="margin-top:5px">
+            <option>구장비</option>
+            <option>장비/용품</option>
+            <option>회식/식비</option>
+            <option>대회/참가비</option>
+            <option>기타</option>
+          </select>
+        </label>
+        <label>금액<input id="financeTxnAmount" type="number" min="0" step="1000" required placeholder="예: 140000"></label>
+        <label>내용<input id="financeTxnMemo" placeholder="예: 10월 정기경기 구장 대관료"></label>
+        <button class="primary" type="submit">저장</button>
+      </form>
+      <div id="financeTxnDeleteWrap" style="display:none">
+        <button id="deleteFinanceTxnBtn" class="primary danger" type="button">내역 삭제</button>
       </div>
     </div>
   </div>
@@ -829,6 +908,7 @@ const state={
   notices:[],
   duesPayments:[],
   duesSettings:{amount:30000,dueDay:10},
+  financeTransactions:[],
   venues:[],
   matches:[
     {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
@@ -1012,6 +1092,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'notices'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'dues_payments'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'club_settings'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'finance_transactions'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'venues'},scheduleRemoteReload)
     .subscribe();
 }
@@ -1031,7 +1112,8 @@ async function loadRemoteState(){
       {data:notices,error:ne},
       {data:duesPayments,error:de},
       {data:clubSettings,error:cse},
-      {data:venues,error:vne}
+      {data:venues,error:vne},
+      {data:financeTransactions,error:fte}
     ] = await Promise.all([
       supabase.from('matches').select('*').order('match_date',{ascending:true}),
       supabase.from('members').select('*').order('name',{ascending:true}),
@@ -1039,9 +1121,10 @@ async function loadRemoteState(){
       supabase.from('notices').select('*').order('created_at',{ascending:false}),
       supabase.from('dues_payments').select('*').order('month_key',{ascending:false}),
       supabase.from('club_settings').select('*').eq('key','dues').maybeSingle(),
-      supabase.from('venues').select('*').order('name',{ascending:true})
+      supabase.from('venues').select('*').order('name',{ascending:true}),
+      supabase.from('finance_transactions').select('*').order('txn_date',{ascending:false}).order('created_at',{ascending:false})
     ]);
-    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;if(vne)throw vne;
+    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;if(vne)throw vne;if(fte)throw fte;
 
     const mine=currentUser?.id||deviceId();
     const memberNameByAuthId={};
@@ -1116,6 +1199,17 @@ async function loadRemoteState(){
       fee:Number(v.fee||0),
       parking:v.parking||'',
       memo:v.memo||''
+    }));
+
+    state.financeTransactions=(financeTransactions||[]).map(t=>({
+      id:Number(t.id),
+      type:t.txn_type,
+      date:t.txn_date,
+      category:t.category||'기타',
+      amount:Number(t.amount||0),
+      memo:t.memo||'',
+      createdBy:t.created_by||null,
+      createdAt:t.created_at||null
     }));
 
     saveState();
@@ -1244,6 +1338,27 @@ async function remoteDeleteVenue(id){
   if(error)throw error;
 }
 
+
+async function remoteUpsertFinanceTransaction(item){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('finance_transactions').upsert({
+    id:item.id,
+    txn_type:item.type,
+    txn_date:item.date,
+    category:item.category,
+    amount:item.amount,
+    memo:item.memo||'',
+    created_by:currentUser?.id||item.createdBy||null
+  });
+  if(error)throw error;
+}
+
+async function remoteDeleteFinanceTransaction(id){
+  if(!remoteReady)return;
+  const {error}=await supabase.from('finance_transactions').delete().eq('id',id);
+  if(error)throw error;
+}
+
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -1252,6 +1367,7 @@ function saveState(){
       notices: state.notices,
       duesPayments: state.duesPayments,
       duesSettings: state.duesSettings,
+      financeTransactions: state.financeTransactions,
       venues: state.venues
     }));
   }catch(e){}
@@ -1271,6 +1387,7 @@ function loadState(){
     if(Array.isArray(saved.notices)) state.notices=saved.notices;
     if(Array.isArray(saved.duesPayments)) state.duesPayments=saved.duesPayments;
     if(saved.duesSettings) state.duesSettings=saved.duesSettings;
+    if(Array.isArray(saved.financeTransactions)) state.financeTransactions=saved.financeTransactions;
     if(Array.isArray(saved.venues)) state.venues=saved.venues;
   }catch(e){}
 }
@@ -1444,6 +1561,7 @@ function renderMemberDuesSummary(){
   $('memberPaidCount').textContent=all.filter(d=>d.paid).length;
   $('memberUnpaidCount').textContent=all.filter(d=>!d.paid).length;
   $('memberTargetCount').textContent=all.length;
+  renderFinanceSummaryForMembers();
 
   let visible=all;
   if(paidFilter==='paid') visible=all.filter(d=>d.paid);
@@ -1820,6 +1938,186 @@ function checkMatchReminders(){
   setNotifiedMatches(notified);
 }
 
+
+function makeFinanceMonthOptions(){
+  const sel=$('financeMonthSelect');
+  if(!sel)return;
+  const now=new Date();
+  const values=[];
+  for(let i=-24;i<=3;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    values.push({key,label:`${d.getFullYear()}년 ${d.getMonth()+1}월`});
+  }
+  sel.innerHTML=values.reverse().map(x=>`<option value="${x.key}">${x.label}</option>`).join('');
+  if(values.some(x=>x.key===currentMonthKey()))sel.value=currentMonthKey();
+}
+
+function calculateFinanceSummary(monthKey=currentMonthKey()){
+  const collected=state.duesPayments.filter(d=>d.paid).reduce((sum,d)=>sum+Number(d.amount||0),0);
+  const otherIncome=state.financeTransactions.filter(t=>t.type==='income').reduce((sum,t)=>sum+Number(t.amount||0),0);
+  const expenses=state.financeTransactions.filter(t=>t.type==='expense').reduce((sum,t)=>sum+Number(t.amount||0),0);
+
+  const monthPaid=state.duesPayments
+    .filter(d=>d.paid && d.monthKey===monthKey)
+    .reduce((sum,d)=>sum+Number(d.amount||0),0);
+  const monthIncomeExtra=state.financeTransactions
+    .filter(t=>t.type==='income' && String(t.date||'').slice(0,7)===monthKey)
+    .reduce((sum,t)=>sum+Number(t.amount||0),0);
+  const monthExpense=state.financeTransactions
+    .filter(t=>t.type==='expense' && String(t.date||'').slice(0,7)===monthKey)
+    .reduce((sum,t)=>sum+Number(t.amount||0),0);
+
+  return {
+    balance:collected+otherIncome-expenses,
+    monthIncome:monthPaid+monthIncomeExtra,
+    monthExpense
+  };
+}
+
+function renderFinanceSummaryForMembers(){
+  if(!$('memberCurrentBalance'))return;
+  const monthKey=$('memberDuesMonth')?.value||currentMonthKey();
+  const x=calculateFinanceSummary(monthKey);
+  $('memberCurrentBalance').textContent=`${x.balance.toLocaleString()}원`;
+  $('memberMonthIncome').textContent=`${x.monthIncome.toLocaleString()}원`;
+  $('memberMonthExpense').textContent=`${x.monthExpense.toLocaleString()}원`;
+}
+
+function renderFinanceLedger(){
+  if(!$('financeLedgerList'))return;
+  if(!$('financeMonthSelect').options.length)makeFinanceMonthOptions();
+
+  const monthKey=$('financeMonthSelect').value||currentMonthKey();
+  const typeFilter=$('financeTypeFilter').value||'';
+  const x=calculateFinanceSummary(monthKey);
+
+  $('financeCurrentBalance').textContent=`${x.balance.toLocaleString()}원`;
+  $('financeMonthIncome').textContent=`${x.monthIncome.toLocaleString()}원`;
+  $('financeMonthExpense').textContent=`${x.monthExpense.toLocaleString()}원`;
+
+  let rows=state.financeTransactions.filter(t=>String(t.date||'').slice(0,7)===monthKey);
+  if(typeFilter)rows=rows.filter(t=>t.type===typeFilter);
+  rows.sort((a,b)=>String(b.date).localeCompare(String(a.date)) || Number(b.id)-Number(a.id));
+
+  $('financeLedgerList').innerHTML=rows.length ? rows.map(t=>`
+    <div class="ledger-item">
+      <div class="row">
+        <div>
+          <div style="font-weight:800">${t.category}</div>
+          <div class="ledger-meta">${t.date}${t.memo?` · ${t.memo}`:''}</div>
+        </div>
+        <div class="ledger-amount ${t.type}">
+          ${t.type==='income'?'+':'-'}${Number(t.amount||0).toLocaleString()}원
+        </div>
+      </div>
+      ${isManager()?`
+      <div class="ledger-actions">
+        <button class="secondary edit-finance-txn" data-id="${t.id}" type="button">수정</button>
+      </div>`:''}
+    </div>`).join('') : '<div class="sub">해당 월 사용내역이 없습니다.</div>';
+
+  document.querySelectorAll('.edit-finance-txn').forEach(b=>b.addEventListener('click',()=>{
+    openFinanceTxnModal(Number(b.dataset.id));
+  }));
+
+  if($('addFinanceTxnBtn'))$('addFinanceTxnBtn').style.display=isManager()?'inline-block':'none';
+  renderFinanceSummaryForMembers();
+}
+
+function openFinanceTxnModal(id=null){
+  if(!isManager()){alert('운영진 이상 권한이 필요합니다.');return;}
+  const editing=id!==null;
+  $('financeTxnModalTitle').textContent=editing?'회비 사용내역 수정':'회비 사용내역 등록';
+  $('financeTxnDeleteWrap').style.display=editing?'block':'none';
+
+  if(editing){
+    const t=state.financeTransactions.find(x=>x.id===id);
+    if(!t)return;
+    $('financeTxnId').value=t.id;
+    $('financeTxnType').value=t.type;
+    $('financeTxnDate').value=t.date;
+    $('financeTxnCategory').value=t.category||'기타';
+    $('financeTxnAmount').value=t.amount||0;
+    $('financeTxnMemo').value=t.memo||'';
+  }else{
+    $('financeTxnId').value='';
+    $('financeTxnType').value='expense';
+    $('financeTxnDate').value=new Date().toISOString().slice(0,10);
+    $('financeTxnCategory').value='구장비';
+    $('financeTxnAmount').value='';
+    $('financeTxnMemo').value='';
+  }
+
+  $('financeTxnModal').classList.add('show');
+  $('financeTxnModal').setAttribute('aria-hidden','false');
+}
+
+function closeFinanceTxnModal(){
+  $('financeTxnModal').classList.remove('show');
+  $('financeTxnModal').setAttribute('aria-hidden','true');
+}
+
+$('addFinanceTxnBtn').addEventListener('click',()=>openFinanceTxnModal());
+$('closeFinanceTxnModal').addEventListener('click',closeFinanceTxnModal);
+$('financeTxnModal').addEventListener('click',e=>{if(e.target===$('financeTxnModal'))closeFinanceTxnModal();});
+
+$('financeTxnForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(!isManager())return;
+
+  const id=$('financeTxnId').value?Number($('financeTxnId').value):Date.now();
+  const existing=state.financeTransactions.find(x=>x.id===id);
+  const item={
+    id,
+    type:$('financeTxnType').value,
+    date:$('financeTxnDate').value,
+    category:$('financeTxnCategory').value,
+    amount:Math.max(0,Number($('financeTxnAmount').value||0)),
+    memo:$('financeTxnMemo').value.trim(),
+    createdBy:existing?.createdBy||currentUser?.id||null,
+    createdAt:existing?.createdAt||new Date().toISOString()
+  };
+  if(!item.date || !item.amount)return;
+
+  const idx=state.financeTransactions.findIndex(x=>x.id===id);
+  if(idx>=0)state.financeTransactions[idx]=item;
+  else state.financeTransactions.push(item);
+
+  saveState();
+  try{await remoteUpsertFinanceTransaction(item);}
+  catch(err){setSyncStatus('회비 사용내역 저장 실패: '+err.message,false);}
+
+  closeFinanceTxnModal();
+  renderFinanceLedger();
+  renderDues();
+  renderMemberDuesSummary();
+  renderFinanceLedger();
+});
+
+$('deleteFinanceTxnBtn').addEventListener('click',async ()=>{
+  if(!isManager())return;
+  const id=Number($('financeTxnId').value);
+  if(!id)return;
+  const t=state.financeTransactions.find(x=>x.id===id);
+
+  if(t && confirm(`${t.category} 내역을 삭제할까요?`)){
+    state.financeTransactions=state.financeTransactions.filter(x=>x.id!==id);
+    saveState();
+    try{await remoteDeleteFinanceTransaction(id);}
+    catch(err){setSyncStatus('회비 사용내역 삭제 실패: '+err.message,false);}
+
+    closeFinanceTxnModal();
+    renderFinanceLedger();
+    renderDues();
+    renderMemberDuesSummary();
+  }
+});
+
+$('financeMonthSelect').addEventListener('change',renderFinanceLedger);
+$('financeTypeFilter').addEventListener('change',renderFinanceLedger);
+
+
 function currentMonthKey(){
   const d=new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -1858,6 +2156,7 @@ function ensureDuesRows(monthKey){
 function renderDues(){
   if(!$('duesList'))return;
   if(!$('duesMonthSelect').options.length) makeMonthOptions();
+makeFinanceMonthOptions();
 
   const monthKey=$('duesMonthSelect').value||currentMonthKey();
   ensureDuesRows(monthKey);
@@ -1942,6 +2241,7 @@ function renderDues(){
     }
     renderDues();
     renderMemberDuesSummary();
+    renderFinanceLedger();
   }));
 
   $('duesSettingsBtn').style.display=isAdmin()?'inline-block':'none';
@@ -2914,6 +3214,7 @@ makeMonthOptions();
 makeMemberDuesMonthOptions();
 renderDues();
 renderMemberDuesSummary();
+renderFinanceLedger();
 renderVenues();
 refreshHome();
 initSupabase();

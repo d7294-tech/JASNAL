@@ -189,6 +189,14 @@
       width:6px;height:6px;border-radius:50%;
       background:var(--green);
     }
+    .match-star{
+      display:inline-block;
+      margin-left:3px;
+      color:var(--green);
+      font-size:10px;
+      font-weight:900;
+      vertical-align:1px;
+    }
     .field{
       display:flex;
       align-items:center;
@@ -2869,6 +2877,13 @@ function renderCalendar(){
     if(dow===0||dow===6) num.classList.add('sun');
     if(dow===5) num.classList.add('fri');
     num.textContent=d;
+    if(state.events[k]?.length){
+      const star=document.createElement('span');
+      star.className='match-star';
+      star.textContent='★';
+      star.title='경기 등록일';
+      num.appendChild(star);
+    }
     btn.appendChild(num);
 
     getScheduleForDate(k).forEach((v,i)=>{
@@ -2878,12 +2893,6 @@ function renderCalendar(){
       tag.textContent=`${i+1}G ${v}`;
       btn.appendChild(tag);
     });
-
-    if(state.events[k]?.length){
-      const dot=document.createElement('span');
-      dot.className='dot';
-      btn.appendChild(dot);
-    }
 
     btn.addEventListener('click',()=>selectDate(k));
     grid.appendChild(btn);

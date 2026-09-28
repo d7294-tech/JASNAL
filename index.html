@@ -1095,7 +1095,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v49</span></div>
+      <div class="jas-version">APP VERSION <span>v50</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1131,7 +1131,7 @@ textarea{
           <input id="landingSignupPasswordConfirm" class="search" type="password" autocomplete="new-password" placeholder="비밀번호 재입력">
         </label>
         <button id="landingSignupBtn" class="primary auth-landing-submit" type="button">회원가입</button>
-        <div class="auth-landing-note">가입 후 관리자 승인 전에는 일부 기능이 제한될 수 있습니다.</div>
+        <div class="auth-landing-note">이메일 인증 없이 가입됩니다. 회원정보 등록 후 관리자 승인을 기다려주세요.</div>
       </div>
 
       <div id="landingAuthStatus" class="sync-status" style="margin-top:12px"></div>
@@ -1341,7 +1341,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v49</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v50</div>
       </div>
     </section>
 
@@ -5004,14 +5004,14 @@ $('landingSignupBtn').addEventListener('click',async ()=>{
     return;
   }
 
-  if(data.session){
+  if(data.session && data.user){
     currentUser=data.user;
+    setLandingAuthStatus('계정 생성 완료 · 회원정보를 등록하세요.',true);
     renderAuthState();
     setTimeout(()=>openMemberModal(),0);
   }else{
-    setLandingAuthStatus('가입 완료. 이메일 인증 후 로그인하세요.',true);
-    $('landingLoginEmail').value=email;
-    setLandingAuthMode('login');
+    // Confirm email이 켜져 있으면 Supabase는 세션 없이 가입 결과를 반환합니다.
+    setLandingAuthStatus('이메일 인증이 아직 켜져 있습니다. Supabase에서 Confirm email을 꺼주세요.',false);
   }
 });
 
@@ -5031,12 +5031,12 @@ $('signupBtn').addEventListener('click',async ()=>{
   $('authStatus').textContent='가입 처리 중...';
   const {data,error}=await supabase.auth.signUp({email,password});
   if(error){ $('authStatus').textContent='회원가입 실패: '+error.message; return; }
-  if(data.session){
+  if(data.session && data.user){
     currentUser=data.user;
     renderAuthState();
     openMemberModal();
   }else{
-    $('authStatus').textContent='가입 완료. 이메일 인증 후 로그인하세요.';
+    $('authStatus').textContent='이메일 인증이 아직 켜져 있습니다. Supabase에서 Confirm email을 꺼주세요.';
   }
 });
 
@@ -5193,7 +5193,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=49',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=50',{
         updateViaCache:'none'
       });
 

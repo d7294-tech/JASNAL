@@ -1039,7 +1039,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v46</span></div>
+      <div class="jas-version">APP VERSION <span>v47</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1274,7 +1274,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v46</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v47</div>
       </div>
     </section>
 
@@ -1578,6 +1578,10 @@ textarea{
         <label>납부 기한
           <input id="duesDueDay" type="number" min="1" max="31" value="10" required>
         </label>
+        <label>회비 적용 시작월
+          <input id="duesStartMonth" type="month" required>
+        </label>
+        <div class="sub" style="margin-top:7px">설정한 월 이전은 회비 대상 및 누적 미납 계산에서 제외됩니다.</div>
         <button class="primary" type="submit">저장</button>
       </form>
     </div>
@@ -1813,7 +1817,7 @@ const state={
   events:{},
   notices:[],
   duesPayments:[],
-  duesSettings:{amount:30000,dueDay:10,openingBalance:0,openingDate:''},
+  duesSettings:{amount:30000,dueDay:10,startMonth:'2026-10',openingBalance:0,openingDate:''},
   financeTransactions:[],
   settlementLocks:{},
   venues:[],
@@ -2228,6 +2232,7 @@ async function loadRemoteState(){
       state.duesSettings={
         amount:Number(clubSettings.value.amount||30000),
         dueDay:Number(clubSettings.value.dueDay||10),
+        startMonth:String(clubSettings.value.startMonth||'2026-10'),
         openingBalance:Number(clubSettings.value.openingBalance||0),
         openingDate:String(clubSettings.value.openingDate||'')
       };
@@ -2501,6 +2506,7 @@ function loadState(){
     if(saved.duesSettings) state.duesSettings={
       amount:Number(saved.duesSettings.amount||30000),
       dueDay:Number(saved.duesSettings.dueDay||10),
+      startMonth:String(saved.duesSettings.startMonth||'2026-10'),
       openingBalance:Number(saved.duesSettings.openingBalance||0),
       openingDate:String(saved.duesSettings.openingDate||'')
     };
@@ -2665,6 +2671,7 @@ function renderMemberDuesSummary(){
   if(!$('memberDuesMonth').options.length)makeMemberDuesMonthOptions();
 
   const monthKey=$('memberDuesMonth').value||currentMonthKey();
+  const applicable=isDuesApplicableMonth(monthKey);
   ensureDuesRows(monthKey);
 
   const searchText=($('memberSearch')?.value||'').trim().toLowerCase();
@@ -2682,7 +2689,7 @@ function renderMemberDuesSummary(){
   const memberIds=new Set(matchedMembers.map(m=>m.id));
 
   const all=state.duesPayments
-    .filter(d=>d.monthKey===monthKey && memberIds.has(d.memberId))
+    .filter(d=>applicable && d.monthKey===monthKey && memberIds.has(d.memberId))
     .map(d=>({...d,member:state.members.find(m=>m.id===d.memberId)}))
     .filter(d=>d.member);
 
@@ -3087,12 +3094,12 @@ function makeFinanceMonthOptions(){
 }
 
 function calculateFinanceSummary(monthKey=currentMonthKey()){
-  const collected=state.duesPayments.filter(d=>d.paid).reduce((sum,d)=>sum+Number(d.amount||0),0);
+  const collected=state.duesPayments.filter(d=>d.paid && isDuesApplicableMonth(d.monthKey)).reduce((sum,d)=>sum+Number(d.amount||0),0);
   const otherIncome=state.financeTransactions.filter(t=>t.type==='income').reduce((sum,t)=>sum+Number(t.amount||0),0);
   const expenses=state.financeTransactions.filter(t=>t.type==='expense').reduce((sum,t)=>sum+Number(t.amount||0),0);
 
   const monthPaid=state.duesPayments
-    .filter(d=>d.paid && d.monthKey===monthKey)
+    .filter(d=>d.paid && isDuesApplicableMonth(d.monthKey) && d.monthKey===monthKey)
     .reduce((sum,d)=>sum+Number(d.amount||0),0);
   const monthIncomeExtra=state.financeTransactions
     .filter(t=>t.type==='income' && String(t.date||'').slice(0,7)===monthKey)
@@ -3120,7 +3127,7 @@ function renderFinanceSummaryForMembers(){
 
 function calculateBalanceBeforeMonth(monthKey){
   const dues=state.duesPayments
-    .filter(d=>d.paid && d.monthKey < monthKey)
+    .filter(d=>d.paid && isDuesApplicableMonth(d.monthKey) && d.monthKey < monthKey)
     .reduce((sum,d)=>sum+Number(d.amount||0),0);
 
   const income=state.financeTransactions
@@ -3141,7 +3148,7 @@ function calculateMonthlySettlement(monthKey){
   const opening=calculateBalanceBeforeMonth(monthKey);
 
   const duesIncome=state.duesPayments
-    .filter(d=>d.paid && d.monthKey===monthKey)
+    .filter(d=>d.paid && isDuesApplicableMonth(d.monthKey) && d.monthKey===monthKey)
     .reduce((sum,d)=>sum+Number(d.amount||0),0);
 
   const otherIncome=state.financeTransactions
@@ -3436,7 +3443,13 @@ function makeMonthOptions(){
   if(values.some(x=>x.key===currentMonthKey())) sel.value=currentMonthKey();
 }
 
+function isDuesApplicableMonth(monthKey){
+  const start=String(state.duesSettings?.startMonth||'');
+  return !start || monthKey>=start;
+}
+
 function ensureDuesRows(monthKey){
+  if(!isDuesApplicableMonth(monthKey))return;
   const activeMembers=state.members.filter(m=>m.status==='활동중');
   for(const m of activeMembers){
     if(!state.duesPayments.some(d=>d.memberId===m.id && d.monthKey===monthKey)){
@@ -3455,7 +3468,7 @@ function ensureDuesRows(monthKey){
 
 function getMemberArrears(memberId, throughMonth=currentMonthKey()){
   const rows=state.duesPayments
-    .filter(d=>d.memberId===memberId && d.monthKey<=throughMonth && !d.paid)
+    .filter(d=>d.memberId===memberId && isDuesApplicableMonth(d.monthKey) && d.monthKey<=throughMonth && !d.paid)
     .sort((a,b)=>a.monthKey.localeCompare(b.monthKey));
 
   return {
@@ -3475,13 +3488,16 @@ makeFinanceMonthOptions();
   const filter=$('duesFilter').value;
   const groupFilter=$('duesGroupFilter')?.value||'';
 
+  const applicable=isDuesApplicableMonth(monthKey);
   const activeDues=state.duesPayments
-    .filter(d=>d.monthKey===monthKey)
+    .filter(d=>applicable && d.monthKey===monthKey)
     .map(d=>({...d,member:state.members.find(m=>m.id===d.memberId)}))
     .filter(d=>d.member && d.member.status==='활동중');
 
   const [y,m]=monthKey.split('-');
-  $('duesMonthLabel').textContent=`${y}년 ${Number(m)}월 · 월 회비 ${Number(state.duesSettings.amount||0).toLocaleString()}원`;
+  $('duesMonthLabel').textContent=applicable
+    ? `${y}년 ${Number(m)}월 · 월 회비 ${Number(state.duesSettings.amount||0).toLocaleString()}원`
+    : `${y}년 ${Number(m)}월 · 회비 적용 전`;
   $('duesTargetCount').textContent=activeDues.length;
   $('duesPaidCount').textContent=activeDues.filter(d=>d.paid).length;
   $('duesUnpaidCount').textContent=activeDues.filter(d=>!d.paid).length;
@@ -3511,7 +3527,7 @@ makeFinanceMonthOptions();
 
   $('duesList').innerHTML=members.length ? members.map(member=>{
     const due=activeDues.find(d=>d.memberId===member.id);
-    const isActive=member.status==='활동중';
+    const isActive=member.status==='활동중' && applicable;
     const monthLocked=isSettlementLocked(monthKey);
 
     return `
@@ -3604,6 +3620,7 @@ $('duesSettingsBtn').addEventListener('click',()=>{
   if(!isAdmin()){ alert('관리자만 회비 설정을 변경할 수 있습니다.'); return; }
   $('duesAmount').value=state.duesSettings.amount||30000;
   $('duesDueDay').value=state.duesSettings.dueDay||10;
+  $('duesStartMonth').value=state.duesSettings.startMonth||currentMonthKey();
   $('duesModal').classList.add('show');
   $('duesModal').setAttribute('aria-hidden','false');
 });
@@ -3625,12 +3642,14 @@ $('duesSettingsForm').addEventListener('submit',async e=>{
 
   const newAmount=Math.max(0,Number($('duesAmount').value||0));
   const newDueDay=Math.min(31,Math.max(1,Number($('duesDueDay').value||10)));
+  const newStartMonth=String($('duesStartMonth').value||currentMonthKey());
   const oldAmount=Number(state.duesSettings?.amount||0);
 
   state.duesSettings={
     ...state.duesSettings,
     amount:newAmount,
     dueDay:newDueDay,
+    startMonth:newStartMonth,
     openingBalance:Number(state.duesSettings?.openingBalance||0),
     openingDate:String(state.duesSettings?.openingDate||'')
   };
@@ -3640,7 +3659,7 @@ $('duesSettingsForm').addEventListener('submit',async e=>{
   const changedUnpaid=[];
   if(newAmount!==oldAmount){
     for(const row of state.duesPayments){
-      if(!row.paid && Number(row.amount||0)!==newAmount){
+      if(!row.paid && row.monthKey>=newStartMonth && Number(row.amount||0)!==newAmount){
         row.amount=newAmount;
         changedUnpaid.push(row);
       }
@@ -5065,7 +5084,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=46',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=47',{
         updateViaCache:'none'
       });
 

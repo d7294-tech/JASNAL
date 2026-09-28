@@ -483,7 +483,7 @@
 
       <div class="notify-card">
         <div class="title" style="font-size:16px">경기 알림</div>
-        <div class="sub" style="margin-top:4px">알림 등록 후 휴대폰 잠금/앱 종료 상태에서도 Push 알림을 받을 수 있습니다.</div>
+        <div class="sub" style="margin-top:4px">Push 등록 후 선택한 알림 시점이 계정에 저장됩니다. 휴대폰 잠금/앱 종료 상태에서도 알림을 받을 수 있습니다.</div>
 
         <div class="notify-row">
           <span>알림 사용</span>
@@ -916,6 +916,7 @@ async function initSupabase(){
       if(currentUser){
         await loadMyMemberProfile();
         await loadRemoteState();
+        await loadNotificationPreference();
         subscribeRealtime();
       }else{
         currentMember=null;
@@ -930,6 +931,7 @@ async function initSupabase(){
     if(currentUser){
       await loadMyMemberProfile();
       await loadRemoteState();
+      await loadNotificationPreference();
       subscribeRealtime();
       setSyncStatus('Cloud 연결됨 · 로그인됨',true);
     }else{
@@ -1522,22 +1524,32 @@ function closeVenueModal(){
 }
 
 
-$('openSettingsBtn').addEventListener('click',()=>{
+$('openSettingsBtn').addEventListener('click',async ()=>{
   showScreen('settings');
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
   const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');
   if(moreBtn)moreBtn.classList.add('active');
 
   $('matchReminderTiming').value=String(getReminderMinutes());
+  if(currentUser)await loadNotificationPreference();
   updateNotificationStatus();
 });
 
 $('enableNotificationsBtn').addEventListener('click',requestNotificationPermission);
 
-$('matchReminderTiming').addEventListener('change',()=>{
+$('matchReminderTiming').addEventListener('change',async ()=>{
   localStorage.setItem(REMINDER_MINUTES_KEY,$('matchReminderTiming').value);
   const notified=getNotifiedMatches();
   setNotifiedMatches(notified);
+
+  try{
+    if(currentUser)await saveNotificationPreference(true);
+    $('notificationStatus').textContent='알림 시점 저장됨';
+  }catch(err){
+    console.error(err);
+    $('notificationStatus').textContent='알림 설정 저장 실패: '+(err?.message||'다시 시도해주세요.');
+  }
+
   checkMatchReminders();
 });
 
@@ -1668,6 +1680,51 @@ async function subscribeToPush(){
   return sub;
 }
 
+
+async function loadNotificationPreference(){
+  if(!supabase || !currentUser)return;
+
+  const {data,error}=await supabase
+    .from('notification_preferences')
+    .select('reminder_minutes,enabled')
+    .eq('user_id',currentUser.id)
+    .maybeSingle();
+
+  if(error){
+    console.error('notification preference load failed',error);
+    return;
+  }
+
+  if(data){
+    const mins=Number(data.reminder_minutes||1440);
+    localStorage.setItem(REMINDER_MINUTES_KEY,String(mins));
+    if($('matchReminderTiming'))$('matchReminderTiming').value=String(mins);
+  }
+}
+
+async function saveNotificationPreference(enabled=true){
+  if(!supabase || !currentUser)return;
+
+  const reminderMinutes=Number(
+    $('matchReminderTiming')?.value ||
+    localStorage.getItem(REMINDER_MINUTES_KEY) ||
+    1440
+  );
+
+  const {error}=await supabase
+    .from('notification_preferences')
+    .upsert({
+      user_id:currentUser.id,
+      reminder_minutes:reminderMinutes,
+      enabled:!!enabled,
+      updated_at:new Date().toISOString()
+    },{
+      onConflict:'user_id'
+    });
+
+  if(error)throw error;
+}
+
 function getReminderMinutes(){
   return Number(localStorage.getItem(REMINDER_MINUTES_KEY)||1440);
 }
@@ -1713,7 +1770,8 @@ async function requestNotificationPermission(){
   try{
     $('notificationStatus').textContent='Push 알림 등록 중...';
     await subscribeToPush();
-    $('notificationStatus').textContent='백그라운드 Push 알림 등록 완료';
+    await saveNotificationPreference(true);
+    $('notificationStatus').textContent='백그라운드 Push 알림 등록 완료 · 설정 저장됨';
     checkMatchReminders();
   }catch(err){
     console.error(err);

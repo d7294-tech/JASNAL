@@ -2869,7 +2869,7 @@ function renderCalendar(){
     const k=dateKey(state.year,state.month,d);
     const dow=new Date(Date.UTC(state.year,state.month,d)).getUTCDay();
     const btn=document.createElement('button');
-    btn.className='day'+(k===state.selected?' selected':'');
+    btn.className='day'+(k===todayLocalYmd()?' selected':'');
     btn.type='button';
 
     const num=document.createElement('div');

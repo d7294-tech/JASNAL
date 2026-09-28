@@ -365,6 +365,11 @@
     .match-venue-preview.show{display:block}
     .match-venue-preview .rowline{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:12px}
     .match-venue-preview .rowline span:first-child{color:var(--muted)}
+    .calendar-match-card{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fff}
+    .calendar-match-card .status{display:inline-block;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:var(--green-soft);color:var(--green-dark)}
+    .calendar-match-actions{display:flex;gap:8px;margin-top:10px}
+    .calendar-match-actions button{flex:1}
+
     @media (max-width:420px){
       .match-form-grid{grid-template-columns:1fr}
     }
@@ -933,7 +938,22 @@
     </div>
   </div>
 
-  <div id="matchModal" class="modal-backdrop" aria-hidden="true">
+  
+  <div id="calendarMatchModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calendarMatchModalTitle">
+      <div class="row">
+        <div>
+          <h3 id="calendarMatchModalTitle" style="margin-bottom:4px">경기 예약 현황</h3>
+          <div id="calendarMatchModalDate" class="sub"></div>
+        </div>
+        <button id="closeCalendarMatchModal" class="secondary" type="button">닫기</button>
+      </div>
+      <div id="calendarMatchModalBody" style="margin-top:12px"></div>
+      <button id="calendarBookMatchBtn" class="primary" type="button" style="display:none">+ 경기 예약</button>
+    </div>
+  </div>
+
+<div id="matchModal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle">
       <div class="row">
         <h3 id="matchModalTitle">경기 등록</h3>
@@ -2897,9 +2917,65 @@ function renderCalendar(){
       btn.appendChild(tag);
     });
 
-    btn.addEventListener('click',()=>selectDate(k));
+    btn.addEventListener('click',()=>openCalendarMatchModal(k));
     grid.appendChild(btn);
   }
+}
+
+
+function openCalendarMatchModal(k){
+  state.selected=k;
+  const [y,m,d]=k.split('-').map(Number);
+  const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
+  const matches=state.matches
+    .filter(x=>x.date===k)
+    .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+
+  $('calendarMatchModalDate').textContent=`${y}년 ${m}월 ${d}일 (${dow})`;
+
+  $('calendarMatchModalBody').innerHTML=matches.length
+    ? matches.map(match=>`
+      <div class="calendar-match-card">
+        <div class="row">
+          <div style="min-width:0">
+            <div style="font-weight:800">${match.title}</div>
+            <div class="sub" style="margin-top:5px">${match.time}${match.endTime?` ~ ${match.endTime}`:''}</div>
+            <div class="sub" style="margin-top:3px">${match.place}</div>
+          </div>
+          <span class="status">${isMatchClosed(match)?'종료':'예약'}</span>
+        </div>
+        ${match.memo?`<div class="sub" style="margin-top:8px">메모: ${match.memo}</div>`:''}
+        <div class="calendar-match-actions">
+          <button class="secondary calendar-vote-status" data-id="${match.id}" type="button">투표 현황</button>
+          ${(!isMatchClosed(match) && isManager())?`<button class="secondary calendar-edit-match" data-id="${match.id}" type="button">수정</button>`:''}
+        </div>
+      </div>`).join('')
+    : '<div class="card"><div class="sub">예약된 경기가 없습니다.</div></div>';
+
+  const bookBtn=$('calendarBookMatchBtn');
+  if(bookBtn){
+    bookBtn.style.display=isManager()?'block':'none';
+    bookBtn.dataset.date=k;
+  }
+
+  document.querySelectorAll('.calendar-vote-status').forEach(btn=>btn.addEventListener('click',()=>{
+    const id=Number(btn.dataset.id);
+    closeCalendarMatchModal();
+    openVoteListModal(id);
+  }));
+  document.querySelectorAll('.calendar-edit-match').forEach(btn=>btn.addEventListener('click',()=>{
+    const id=Number(btn.dataset.id);
+    closeCalendarMatchModal();
+    openMatchModal(id);
+  }));
+
+  $('calendarMatchModal').classList.add('show');
+  $('calendarMatchModal').setAttribute('aria-hidden','false');
+}
+
+function closeCalendarMatchModal(){
+  $('calendarMatchModal').classList.remove('show');
+  $('calendarMatchModal').setAttribute('aria-hidden','true');
 }
 
 function selectDate(k){
@@ -2908,6 +2984,21 @@ function selectDate(k){
   const [y,m,d]=k.split('-').map(Number);
 }
 
+
+
+$('closeCalendarMatchModal').addEventListener('click',closeCalendarMatchModal);
+$('calendarMatchModal').addEventListener('click',e=>{
+  if(e.target===$('calendarMatchModal'))closeCalendarMatchModal();
+});
+$('calendarBookMatchBtn').addEventListener('click',()=>{
+  if(!isManager()){
+    alert('운영진 이상 권한이 필요합니다.');
+    return;
+  }
+  const date=$('calendarBookMatchBtn').dataset.date||state.selected||todayLocalYmd();
+  closeCalendarMatchModal();
+  openMatchModal(null,date);
+});
 
 $('prevMonth').addEventListener('click',()=>{
   state.month--;

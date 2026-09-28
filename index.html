@@ -1048,10 +1048,13 @@
 
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const initialToday=new Date();
+const initialTodayKey=`${initialToday.getFullYear()}-${String(initialToday.getMonth()+1).padStart(2,'0')}-${String(initialToday.getDate()).padStart(2,'0')}`;
+
 const state={
-  year:2026,
-  month:9,
-  selected:'2026-10-01',
+  year:initialToday.getFullYear(),
+  month:initialToday.getMonth(),
+  selected:initialTodayKey,
   schedule:{},
   events:{},
   notices:[],

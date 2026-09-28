@@ -1033,6 +1033,60 @@ textarea{
   }
 }
 
+
+/* v49 — birthday profile + home birthday banner */
+.birthday-card{
+  border-color:#6a3517!important;
+  background:
+    radial-gradient(circle at 92% 12%,rgba(255,116,23,.13),transparent 30%),
+    linear-gradient(180deg,#1b130e,#151515)!important;
+}
+.birthday-kicker{
+  color:#ff8a32;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:2px;
+  margin-bottom:4px;
+}
+.birthday-badge{
+  color:#ff8a32;
+  background:#251105;
+  border:1px solid #6a3517;
+  border-radius:999px;
+  padding:5px 8px;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.6px;
+}
+.birthday-list{
+  display:grid;
+  gap:8px;
+  margin-top:12px;
+}
+.birthday-person{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid #3d3028;
+  background:rgba(10,10,10,.44);
+  border-radius:13px;
+  padding:10px 12px;
+}
+.birthday-avatar{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#2a1609;
+  font-size:17px;
+}
+.birthday-name{
+  font-weight:900;
+  color:#fff;
+}
+
 </style>
 </head>
 <body>
@@ -1041,7 +1095,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v48</span></div>
+      <div class="jas-version">APP VERSION <span>v49</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1100,6 +1154,17 @@ textarea{
           <button id="homeNoticeMore" class="secondary" type="button" style="padding:6px 9px">전체</button>
         </div>
         <div id="homeNoticeList"></div>
+      </div>
+
+      <div id="homeBirthdayCard" class="card birthday-card" style="display:none">
+        <div class="row">
+          <div>
+            <div class="birthday-kicker">TODAY</div>
+            <div class="title" style="font-size:17px">🎂 오늘의 생일</div>
+          </div>
+          <span class="birthday-badge">HAPPY BIRTHDAY</span>
+        </div>
+        <div id="homeBirthdayList" class="birthday-list"></div>
       </div>
 
       <div class="card">
@@ -1276,7 +1341,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v48</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v49</div>
       </div>
     </section>
 
@@ -1766,6 +1831,9 @@ textarea{
       <form id="memberForm">
         <input id="memberId" type="hidden"><input id="memberAuthUserId" type="hidden">
         <label>이름<input id="memberName" required placeholder="이름"></label>
+        <label>생년월일
+          <input id="memberBirthDate" type="date" required>
+        </label>
         <label>그룹
           <select id="memberGroup" class="search" style="margin-top:5px">
             <option>1그룹</option><option>2그룹</option><option>3그룹</option><option>OFFICE</option>
@@ -2209,6 +2277,7 @@ async function loadRemoteState(){
       group:m.group_name,
       role:m.role,
       status:m.status,
+      birthDate:m.birth_date||'',
       authUserId:m.auth_user_id||null
     }));
 
@@ -2321,6 +2390,7 @@ async function remoteUpsertMember(item){
   if(!remoteReady)return;
   const {error}=await supabase.from('members').upsert({
     id:item.id,name:item.name,group_name:item.group,role:item.role,status:item.status,
+    birth_date:item.birthDate||null,
     auth_user_id:item.authUserId||null
   });
   if(error)throw error;
@@ -2838,6 +2908,10 @@ $('venueForm').addEventListener('submit',async e=>{
     memo:$('venueMemo').value.trim()
   };
   if(!item.name)return;
+  if(!item.birthDate){
+    alert('생년월일을 입력하세요.');
+    return;
+  }
 
   const idx=state.venues.findIndex(x=>x.id===id);
   if(idx>=0)state.venues[idx]=item;
@@ -4126,6 +4200,31 @@ function closeVenueInfoModal(){
 }
 
 function refreshHome(){
+  const todayNow=new Date();
+  const todayMMDD=`${String(todayNow.getMonth()+1).padStart(2,'0')}-${String(todayNow.getDate()).padStart(2,'0')}`;
+  const birthdayMembers=state.members
+    .filter(m=>m.status==='활동중' && m.birthDate && String(m.birthDate).slice(5)===todayMMDD)
+    .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+
+  const birthdayCard=$('homeBirthdayCard');
+  const birthdayList=$('homeBirthdayList');
+  if(birthdayCard && birthdayList){
+    if(birthdayMembers.length){
+      birthdayCard.style.display='block';
+      birthdayList.innerHTML=birthdayMembers.map(m=>`
+        <div class="birthday-person">
+          <div class="birthday-avatar">🎉</div>
+          <div>
+            <div class="birthday-name">${m.name}</div>
+            <div class="sub">${m.group||''}</div>
+          </div>
+        </div>`).join('');
+    }else{
+      birthdayCard.style.display='none';
+      birthdayList.innerHTML='';
+    }
+  }
+
   const next=getNextMatch();
   const titleEl=$('homeNextMatchTitle');
   const placeEl=$('homeNextMatchPlace');
@@ -4725,6 +4824,7 @@ function openMemberModal(id=null){
     $('memberId').value=m.id;
     $('memberAuthUserId').value=m.authUserId||'';
     $('memberName').value=m.name||'';
+    $('memberBirthDate').value=m.birthDate||'';
     $('memberGroup').value=m.group||'1그룹';
     $('memberRole').value=m.role||'회원';
     $('memberStatus').value=m.status||'활동중';
@@ -4732,6 +4832,7 @@ function openMemberModal(id=null){
     $('memberId').value='';
     $('memberAuthUserId').value=currentUser?.id||'';
     $('memberName').value='';
+    $('memberBirthDate').value='';
     $('memberGroup').value='1그룹';
     $('memberRole').value='회원';
     $('memberStatus').value=currentUser ? '승인대기' : '활동중';
@@ -4767,6 +4868,7 @@ $('memberForm').addEventListener('submit',async e=>{
   const item={
     id:editingId || Date.now(),
     name:$('memberName').value.trim(),
+    birthDate:$('memberBirthDate').value,
     group:$('memberGroup').value,
     role:isAdmin() ? $('memberRole').value : (existing?.role||'회원'),
     status:isAdmin() ? $('memberStatus').value : (existing?.status||'승인대기'),
@@ -5091,7 +5193,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=48',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=49',{
         updateViaCache:'none'
       });
 

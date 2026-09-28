@@ -1087,15 +1087,62 @@ textarea{
   color:#fff;
 }
 
+
+/* v52 — persistent session / automatic login */
+.auth-boot-splash{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at 50% 34%,rgba(255,116,23,.10),transparent 24%),
+    #070707;
+  color:#fff;
+  transition:opacity .18s ease;
+}
+.auth-boot-splash.hide{
+  opacity:0;
+  pointer-events:none;
+}
+.auth-boot-logo{
+  width:76px;
+  max-height:90px;
+  object-fit:contain;
+  margin-bottom:14px;
+}
+.auth-boot-title{
+  color:#ff7417;
+  font-size:28px;
+  font-weight:1000;
+  font-style:italic;
+  letter-spacing:1px;
+}
+.auth-boot-sub{
+  margin-top:8px;
+  color:#898989;
+  font-size:12px;
+  font-weight:700;
+}
+
 </style>
 </head>
 <body>
+
+  <div id="authBootSplash" class="auth-boot-splash">
+    <img src="./jas-logo.png" alt="JAS" class="auth-boot-logo">
+    <div class="auth-boot-title">JASNAL</div>
+    <div class="auth-boot-sub">로그인 상태 확인 중...</div>
+  </div>
+
 
   <section id="authLanding" class="auth-landing">
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v51</span></div>
+      <div class="jas-version">APP VERSION <span>v52</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1353,7 +1400,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v51</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v52</div>
       </div>
     </section>
 
@@ -1930,6 +1977,16 @@ let remoteReady=false;
 let remoteReloadTimer=null;
 let currentUser=null;
 let currentMember=null;
+let authBootstrapping=true;
+
+function finishAuthBootstrap(){
+  authBootstrapping=false;
+  const splash=$('authBootSplash');
+  if(splash){
+    splash.classList.add('hide');
+    setTimeout(()=>{ splash.style.display='none'; },200);
+  }
+}
 function isManager(){
   return currentMember && (currentMember.role==='운영진' || currentMember.role==='관리자') && currentMember.status==='활동중';
 }
@@ -1975,12 +2032,21 @@ async function initSupabase(){
   if(!url || !key){
     supabase=null; remoteReady=false; currentUser=null; currentMember=null;
     setSyncStatus('Cloud 설정이 없습니다.');
+    finishAuthBootstrap();
     renderAuthState();
     return false;
   }
 
   try{
-    supabase=createClient(url,key);
+    supabase=createClient(url,key,{
+      auth:{
+        persistSession:true,
+        autoRefreshToken:true,
+        detectSessionInUrl:true,
+        storage:window.localStorage,
+        storageKey:'jasnal-auth-session'
+      }
+    });
     remoteReady=true;
 
     const {data:{session}}=await supabase.auth.getSession();
@@ -2012,12 +2078,15 @@ async function initSupabase(){
     }else{
       setSyncStatus('Cloud 연결됨 · 로그인 필요',true);
     }
+    finishAuthBootstrap();
     renderAuthState();
     return true;
   }catch(err){
     console.error(err);
     supabase=null; remoteReady=false;
     setSyncStatus('연결 실패: '+(err?.message||'설정을 확인하세요.'),false);
+    finishAuthBootstrap();
+    renderAuthState();
     return false;
   }
 }
@@ -2031,6 +2100,7 @@ async function loadMyMemberProfile(){
   if(error){ console.error(error); currentMember=null; return null; }
   currentMember=data?{
     id:Number(data.id),name:data.name,group:data.group_name,role:data.role,status:data.status,
+    birthDate:data.birth_date||'',
     authUserId:data.auth_user_id
   }:null;
   return currentMember;
@@ -2045,6 +2115,13 @@ function renderAuthGate(){
   const landing=$('authLanding');
   const appMain=$('appMain');
   const appNav=$('appNav');
+
+  if(authBootstrapping){
+    if(landing)landing.style.display='none';
+    if(appMain)appMain.style.display='none';
+    if(appNav)appNav.style.display='none';
+    return;
+  }
 
   if(landing)landing.style.display=loggedIn?'none':'block';
   if(appMain)appMain.style.display=loggedIn?'block':'none';
@@ -5272,7 +5349,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=51',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=52',{
         updateViaCache:'none'
       });
 

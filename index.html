@@ -511,6 +511,247 @@ input::placeholder,textarea::placeholder{color:#777}
 .sync-ok{color:#ff8a32!important}
 @media (max-width:540px){.app{padding-left:14px;padding-right:14px}.auth-landing{padding-left:18px;padding-right:18px}}
 
+
+/* v41 — mobile dark-mode cleanup */
+.secondary,
+.match-tab,
+.attendance-btn,
+.attendance-view-btn,
+.vote-list-section,
+.vote-name,
+.member-chip,
+.list-item,
+.notice-card,
+.dues-stat,
+.finance-stat,
+.ledger-item,
+.settlement-item,
+.venue-card,
+.notify-card,
+.sync-box,
+.auth-panel,
+.match-venue-preview,
+.calendar-match-card,
+.menu button{
+  background:#181818!important;
+  color:#f4f4f5!important;
+  border-color:#3d3d3d!important;
+}
+
+.attendance-btn.active{
+  background:#2c1609!important;
+  color:#ff8a32!important;
+  border-color:#ff7417!important;
+}
+
+.vote-list-title,
+.notice-title,
+.venue-title,
+.ledger-amount,
+.dues-stat b,
+.finance-stat b,
+.settlement-item b{
+  color:#f4f4f5;
+}
+
+.vote-empty,
+.notice-meta,
+.venue-meta,
+.ledger-meta,
+.auth-user{
+  color:#9ca3af!important;
+}
+
+.dues-total,
+.finance-balance{
+  color:#ff8a32!important;
+}
+
+.dues-paid,
+.finance-income{
+  color:#34d399!important;
+}
+
+.dues-unpaid,
+.finance-expense{
+  color:#f87171!important;
+}
+
+.settlement-total{
+  background:#2c1609!important;
+  border-color:#ff7417!important;
+}
+
+.profile-badge{
+  background:#2c1609!important;
+  color:#ff8a32!important;
+}
+
+.pending-badge{
+  background:#33210b!important;
+  color:#fbbf24!important;
+}
+
+.field,
+.match-venue-preview{
+  background:#151515!important;
+}
+
+.search,
+input,
+select,
+textarea{
+  min-height:44px;
+}
+
+.modal{
+  background:#161616!important;
+  border-color:#3f3f3f!important;
+  color:#f4f4f5;
+}
+
+.modal-backdrop{
+  background:rgba(0,0,0,.78);
+}
+
+@media (max-width:540px){
+  .app{
+    max-width:none;
+    padding:12px 12px calc(82px + env(safe-area-inset-bottom));
+  }
+
+  .card,
+  .home-link{
+    border-radius:16px;
+    padding:14px;
+    margin-bottom:12px;
+  }
+
+  .hero{
+    border-radius:17px;
+    padding:18px 16px;
+  }
+
+  .title{font-size:17px}
+  .sub{font-size:12px}
+
+  .vote-grid,
+  .attendance-grid{
+    gap:6px;
+  }
+
+  .vote,
+  .attendance-btn{
+    min-height:58px;
+    padding:8px 3px;
+    font-size:12px;
+  }
+
+  .attendance-view-btn{
+    min-height:44px;
+  }
+
+  .match-actions{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:7px;
+  }
+
+  .match-actions button{
+    min-width:0;
+    padding:10px 6px;
+    font-size:12px;
+  }
+
+  .dues-summary,
+  .finance-summary{
+    gap:7px;
+  }
+
+  .dues-stat,
+  .finance-stat{
+    padding:11px 6px;
+    min-width:0;
+  }
+
+  .dues-stat span,
+  .finance-stat span{
+    font-size:11px;
+  }
+
+  .dues-stat b,
+  .finance-stat b{
+    font-size:16px;
+    overflow-wrap:anywhere;
+  }
+
+  .vote-list-section{
+    padding:11px;
+  }
+
+  .vote-name{
+    background:#252525!important;
+    color:#f4f4f5!important;
+  }
+
+  .modal-backdrop{
+    padding:0;
+    align-items:flex-end;
+  }
+
+  .modal{
+    width:100%;
+    max-width:none;
+    max-height:88dvh;
+    border-radius:22px 22px 0 0;
+    padding:16px 14px calc(18px + env(safe-area-inset-bottom));
+    border-left:0;
+    border-right:0;
+    border-bottom:0;
+  }
+
+  .auth-grid,
+  .approval-actions{
+    gap:7px;
+  }
+
+  .nav{
+    width:100%;
+  }
+
+  .nav button{
+    min-height:62px;
+    font-size:11px;
+  }
+
+  .nav .ico{
+    font-size:18px;
+  }
+}
+
+@media (max-width:390px){
+  .app{padding-left:10px;padding-right:10px}
+
+  .dues-summary,
+  .finance-summary{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+
+  .dues-stat b,
+  .finance-stat b{
+    font-size:14px;
+  }
+
+  .vote,
+  .attendance-btn{
+    font-size:11px;
+  }
+
+  .match-actions button{
+    font-size:11px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -518,7 +759,7 @@ input::placeholder,textarea::placeholder{color:#777}
   <section id="authLanding" class="auth-landing">
     <div class="auth-landing-brand">
       <h1>JASNAL</h1>
-      <p>APP VERSION · v40</p>
+      <p>APP VERSION · v41</p>
     </div>
 
     <div class="auth-landing-card">
@@ -750,7 +991,7 @@ input::placeholder,textarea::placeholder{color:#777}
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v40</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v41</div>
       </div>
     </section>
 
@@ -4439,7 +4680,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=40',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=41',{
         updateViaCache:'none'
       });
 

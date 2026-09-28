@@ -383,6 +383,14 @@
       </div>
 
       <div class="card">
+        <div class="row" style="margin-bottom:12px">
+          <div class="title" style="font-size:16px">공지사항</div>
+          <button id="homeNoticeMore" class="secondary" type="button" style="padding:6px 9px">전체</button>
+        </div>
+        <div id="homeNoticeList"></div>
+      </div>
+
+      <div class="card">
         <div class="row">
           <div>
             <div class="sub">다음 경기</div>
@@ -414,13 +422,7 @@
         </div>
       </button>
 
-      <div class="card">
-        <div class="row" style="margin-bottom:12px">
-          <div class="title" style="font-size:16px">공지사항</div>
-          <button id="homeNoticeMore" class="secondary" type="button" style="padding:6px 9px">전체</button>
-        </div>
-        <div id="homeNoticeList"></div>
-      </div>
+
     </section>
 
     <section id="calendar" class="screen">
@@ -673,6 +675,13 @@
         </div>
         <button id="newNoticeBtn" class="secondary" type="button">+ 공지</button>
       </div>
+      <select id="noticeCategoryFilter" class="secondary" style="width:100%;min-height:42px;margin-bottom:10px">
+        <option value="">전체</option>
+        <option>긴급</option>
+        <option>경기</option>
+        <option>회비</option>
+        <option>일반</option>
+      </select>
       <div id="noticeList" class="list"></div>
     </section>
 
@@ -853,6 +862,10 @@
             <option>회비</option>
             <option>긴급</option>
           </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <input id="noticePinned" type="checkbox" style="width:auto;margin:0">
+          홈 상단에 고정
         </label>
         <label>내용
           <textarea id="noticeBody" class="search" style="min-height:120px;margin-top:5px" placeholder="공지 내용을 입력하세요."></textarea>
@@ -1314,6 +1327,7 @@ async function loadRemoteState(){
       category:n.category||'일반',
       body:n.body||'',
       authorName:n.author_name||'',
+      pinned:!!n.pinned,
       createdAt:n.created_at
     }));
 
@@ -1433,6 +1447,7 @@ async function remoteUpsertNotice(item){
     title:item.title,
     category:item.category,
     body:item.body,
+    pinned:!!item.pinned,
     author_name:item.authorName||currentMember?.name||currentUser?.email||'',
     author_user_id:currentUser?.id||null
   });
@@ -2683,17 +2698,23 @@ function formatNoticeDate(ts){
 }
 
 function renderNotices(){
-  const list=[...state.notices].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const categoryFilter=$('noticeCategoryFilter')?.value||'';
+  const all=[...state.notices].sort((a,b)=>{
+    const pinDiff=Number(!!b.pinned)-Number(!!a.pinned);
+    if(pinDiff)return pinDiff;
+    return String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+  });
+  const list=categoryFilter ? all.filter(n=>n.category===categoryFilter) : all;
 
   if($('noticeList')){
     $('noticeList').innerHTML=list.length ? list.map(n=>`
       <div class="notice-card">
         <div class="row">
           <div>
-            <div class="notice-title">${n.title}</div>
+            <div class="notice-title">${n.pinned?'📌 ':''}${n.title}</div>
             <div class="notice-meta">${n.category} · ${formatNoticeDate(n.createdAt)}${n.authorName?` · ${n.authorName}`:''}</div>
           </div>
-          <span class="pill">${n.category}</span>
+          <span class="pill">${n.pinned?'고정':n.category}</span>
         </div>
         ${n.body?`<div class="notice-body">${n.body}</div>`:''}
         ${isManager()?`
@@ -2708,11 +2729,11 @@ function renderNotices(){
   }
 
   if($('homeNoticeList')){
-    const top=list.slice(0,3);
+    const top=all.slice(0,3);
     $('homeNoticeList').innerHTML=top.length ? top.map(n=>`
       <button class="home-link" type="button" style="margin-bottom:8px;padding:10px 12px" data-notice-home="${n.id}">
         <div class="row">
-          <span>${n.title}</span>
+          <span>${n.pinned?'📌 ':''}${n.title}</span>
           <span class="sub">${formatNoticeDate(n.createdAt)}</span>
         </div>
       </button>`).join('') : '<div class="sub">등록된 공지가 없습니다.</div>';
@@ -2727,7 +2748,6 @@ function renderNotices(){
 
   if($('newNoticeBtn')) $('newNoticeBtn').style.display=isManager()?'inline-block':'none';
 }
-
 function openNoticeModal(id=null){
   if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
   const editing=id!==null;
@@ -2740,11 +2760,13 @@ function openNoticeModal(id=null){
     $('noticeId').value=n.id;
     $('noticeTitleInput').value=n.title||'';
     $('noticeCategory').value=n.category||'일반';
+    $('noticePinned').checked=!!n.pinned;
     $('noticeBody').value=n.body||'';
   }else{
     $('noticeId').value='';
     $('noticeTitleInput').value='';
     $('noticeCategory').value='일반';
+    $('noticePinned').checked=false;
     $('noticeBody').value='';
   }
 
@@ -2757,6 +2779,7 @@ function closeNoticeModal(){
   $('noticeModal').setAttribute('aria-hidden','true');
 }
 
+if($('noticeCategoryFilter'))$('noticeCategoryFilter').addEventListener('change',renderNotices);
 $('newNoticeBtn').addEventListener('click',()=>openNoticeModal());
 $('closeNoticeModal').addEventListener('click',closeNoticeModal);
 $('noticeModal').addEventListener('click',e=>{
@@ -2772,6 +2795,7 @@ $('noticeForm').addEventListener('submit',async e=>{
     id,
     title:$('noticeTitleInput').value.trim(),
     category:$('noticeCategory').value,
+    pinned:!!$('noticePinned').checked,
     body:$('noticeBody').value.trim(),
     authorName:existing?.authorName||currentMember?.name||currentUser?.email||'',
     createdAt:existing?.createdAt||new Date().toISOString()

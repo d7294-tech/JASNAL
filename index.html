@@ -353,6 +353,10 @@
     .match-quick-times{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
     .match-quick-times button{font-size:12px;padding:7px 9px}
     .match-warning{font-size:12px;color:#dc2626;margin-top:8px;display:none}
+    .match-venue-preview{display:none;margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafafa}
+    .match-venue-preview.show{display:block}
+    .match-venue-preview .rowline{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:12px}
+    .match-venue-preview .rowline span:first-child{color:var(--muted)}
     @media (max-width:420px){
       .match-form-grid{grid-template-columns:1fr}
     }
@@ -959,6 +963,14 @@
         <label id="matchPlaceManualWrap">장소 직접 입력
           <input id="matchPlace" placeholder="구장명을 입력하세요" required>
         </label>
+
+        <div id="matchVenuePreview" class="match-venue-preview">
+          <div class="rowline"><span>주소</span><b id="matchVenuePreviewAddress">-</b></div>
+          <div class="rowline"><span>대관료</span><b id="matchVenuePreviewFee">-</b></div>
+          <div class="rowline"><span>주차</span><b id="matchVenuePreviewParking">-</b></div>
+          <div id="matchVenuePreviewMemo" class="sub" style="margin-top:6px"></div>
+          <a id="matchVenuePreviewMap" class="secondary" href="#" target="_blank" rel="noopener" style="display:none;text-align:center;text-decoration:none;margin-top:8px">지도 보기</a>
+        </div>
 
         <label>메모
           <input id="matchMemo" placeholder="예: 구장비 140,000원 / 19:50 집합">
@@ -1878,6 +1890,7 @@ $('venueForm').addEventListener('submit',async e=>{
   closeVenueModal();
   renderVenues();
   populateMatchVenueSelect($('matchPlace')?.value||'',$('matchVenueSearch')?.value||'');
+  renderSelectedMatchVenuePreview();
 });
 
 $('deleteVenueBtn').addEventListener('click',async ()=>{
@@ -3144,6 +3157,7 @@ function renderMatches(){
         : (m.attendance?.myVote ? '내 선택: '+({yes:'참석',no:'불참',maybe:'미정'}[m.attendance.myVote]) : '참석 여부를 선택하세요.')}</div>
       <button class="attendance-view-btn vote-list-btn" data-id="${m.id}" type="button">투표 인원 보기</button>
       <div class="match-actions">
+        <button class="secondary open-match-venue" data-id="${m.id}" type="button">구장 정보</button>
         ${(!isMatchClosed(m) && isManager())?`<button class="secondary edit-match" data-id="${m.id}">수정</button>`:''}
         <button class="secondary open-calendar-match" data-date="${m.date}">캘린더 보기</button>
       </div>
@@ -3180,6 +3194,10 @@ function renderMatches(){
   document.querySelectorAll('.vote-list-btn').forEach(b=>b.addEventListener('click',()=>{
     openVoteListModal(Number(b.dataset.id));
   }));
+  document.querySelectorAll('.open-match-venue').forEach(b=>b.addEventListener('click',()=>{
+    const match=state.matches.find(x=>x.id===Number(b.dataset.id));
+    if(match)openVenueInfoForMatch(match);
+  }));
   document.querySelectorAll('.open-calendar-match').forEach(b=>b.addEventListener('click',()=>{
     const [y,m,d]=b.dataset.date.split('-').map(Number);
     state.year=y;state.month=m-1;state.selected=b.dataset.date;
@@ -3189,6 +3207,33 @@ function renderMatches(){
   applyRoleVisibility();
 }
 
+
+
+function renderSelectedMatchVenuePreview(){
+  const selected=$('matchPlaceSelect')?.value||'';
+  const preview=$('matchVenuePreview');
+  if(!preview)return;
+  const v=state.venues.find(x=>x.name===selected);
+  if(!v){
+    preview.classList.remove('show');
+    return;
+  }
+
+  $('matchVenuePreviewAddress').textContent=v.address||'등록 없음';
+  $('matchVenuePreviewFee').textContent=v.fee?`${Number(v.fee).toLocaleString()}원`:'등록 없음';
+  $('matchVenuePreviewParking').textContent=v.parking||'등록 없음';
+  $('matchVenuePreviewMemo').textContent=v.memo||'';
+
+  const map=$('matchVenuePreviewMap');
+  if(v.mapUrl){
+    map.href=v.mapUrl;
+    map.style.display='block';
+  }else{
+    map.removeAttribute('href');
+    map.style.display='none';
+  }
+  preview.classList.add('show');
+}
 
 function populateMatchVenueSelect(selectedPlace='', searchText=''){
   const sel=$('matchPlaceSelect');
@@ -3214,6 +3259,7 @@ function populateMatchVenueSelect(selectedPlace='', searchText=''){
     $('matchPlace').value=selectedPlace||'';
     $('matchPlaceManualWrap').style.display='block';
   }
+  renderSelectedMatchVenuePreview();
 }
 
 
@@ -3241,6 +3287,7 @@ $('matchPlaceSelect').addEventListener('change',()=>{
     $('matchPlaceManualWrap').style.display='block';
     $('matchPlace').focus();
   }
+  renderSelectedMatchVenuePreview();
 });
 
 

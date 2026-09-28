@@ -560,13 +560,25 @@
         <div class="dues-stat"><span class="sub">미납</span><b id="duesUnpaidCount" class="dues-unpaid">0</b></div>
       </div>
 
-      <div class="row" style="margin-bottom:10px">
+      <div class="row" style="margin-bottom:8px">
         <select id="duesMonthSelect" class="secondary" style="flex:1;min-height:44px"></select>
         <select id="duesFilter" class="secondary" style="flex:1;min-height:44px">
           <option value="">전체</option>
           <option value="paid">납부</option>
           <option value="unpaid">미납</option>
         </select>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <select id="duesGroupFilter" class="secondary" style="flex:1;min-height:44px">
+          <option value="">전체 그룹</option>
+          <option value="OFFICE">OFFICE</option>
+          <option value="1그룹">1그룹</option>
+          <option value="2그룹">2그룹</option>
+          <option value="3그룹">3그룹</option>
+        </select>
+        <div class="secondary" style="flex:1;min-height:44px;display:flex;align-items:center;justify-content:center">
+          표시 인원&nbsp;<b id="duesVisibleCount">0</b>명
+        </div>
       </div>
 
       <div id="approvalQueue" class="card" style="display:none;margin-bottom:12px">
@@ -2282,6 +2294,7 @@ makeFinanceMonthOptions();
   const monthKey=$('duesMonthSelect').value||currentMonthKey();
   ensureDuesRows(monthKey);
   const filter=$('duesFilter').value;
+  const groupFilter=$('duesGroupFilter')?.value||'';
 
   const activeDues=state.duesPayments
     .filter(d=>d.monthKey===monthKey)
@@ -2304,7 +2317,12 @@ makeFinanceMonthOptions();
     members=members.filter(m=>ids.has(m.id));
   }
 
+  if(groupFilter){
+    members=members.filter(m=>m.group===groupFilter);
+  }
+
   members.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  if($('duesVisibleCount'))$('duesVisibleCount').textContent=members.length;
 
   $('duesList').innerHTML=members.length ? members.map(member=>{
     const due=activeDues.find(d=>d.memberId===member.id);
@@ -2373,6 +2391,7 @@ $('duesMonthSelect').addEventListener('change',renderDues);
 $('memberDuesMonth').addEventListener('change',renderMemberDuesSummary);
 $('memberDuesPaidFilter').addEventListener('change',renderMemberDuesSummary);
 $('duesFilter').addEventListener('change',renderDues);
+$('duesGroupFilter').addEventListener('change',renderDues);
 
 $('openDuesBtn').addEventListener('click',()=>{
   if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }

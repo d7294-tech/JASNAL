@@ -922,15 +922,39 @@ textarea{
   .nav-svg,.nav-svg svg{width:26px;height:26px}
 }
 
+
+/* v43 — real JAS logo asset */
+.jas-logo-image{
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 0 14px rgba(255,116,23,.08));
+}
+.login-logo{
+  width:96px;
+  max-height:118px;
+  margin-bottom:14px;
+}
+.hero-logo{
+  width:72px;
+  max-height:88px;
+  opacity:.34;
+  margin-left:18px;
+}
+.jas-mark,.hero-jas{display:none!important}
+@media (max-width:540px){
+  .login-logo{width:86px;max-height:104px}
+  .hero-logo{width:64px;max-height:76px}
+}
+
 </style>
 </head>
 <body>
 
   <section id="authLanding" class="auth-landing">
     <div class="auth-landing-brand jas-login-brand">
-      <div class="jas-mark">JAS</div>
+      <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v42</span></div>
+      <div class="jas-version">APP VERSION <span>v43</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -980,7 +1004,7 @@ textarea{
           <div class="hero-wordmark">JASNAL</div>
           <div class="hero-tagline">PLAY TOGETHER</div>
         </div>
-        <div class="hero-jas">JAS</div>
+        <img class="jas-logo-image hero-logo" src="./jas-logo.png" alt="JAS">
       </div>
 
       <div class="card">
@@ -1165,7 +1189,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v42</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v43</div>
       </div>
     </section>
 
@@ -4864,7 +4888,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=42',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=43',{
         updateViaCache:'none'
       });
 

@@ -1,5 +1,5 @@
-const CACHE_NAME='jasnal-v42';
-const CORE=['./','./index.html','./manifest.webmanifest'];
+const CACHE_NAME='jasnal-v43';
+const CORE=['./','./index.html','./manifest.webmanifest','./jas-logo.png'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));

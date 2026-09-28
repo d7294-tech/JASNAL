@@ -679,7 +679,7 @@
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA · v36</div>
+        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA · v37</div>
       </div>
     </section>
 
@@ -1353,7 +1353,7 @@ function renderAuthGate(){
 
   if(landing)landing.style.display=loggedIn?'none':'block';
   if(appMain)appMain.style.display=loggedIn?'block':'none';
-  if(appNav)appNav.style.display=loggedIn?'flex':'none';
+  if(appNav)appNav.style.display=loggedIn?'grid':'none';
 
   if(loggedIn){
     showScreen('home');
@@ -4368,7 +4368,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=36',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=37',{
         updateViaCache:'none'
       });
 

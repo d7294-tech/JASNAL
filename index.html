@@ -946,6 +946,91 @@ textarea{
   .hero-logo{width:64px;max-height:76px}
 }
 
+
+/* v44 — larger mobile calendar */
+#calendar.screen{
+  max-width:100%;
+}
+
+#calendar .month-head{
+  margin-bottom:12px;
+}
+
+#calendar .calendar{
+  width:100%;
+}
+
+#calendar .week div{
+  padding:11px 2px;
+  font-size:12px;
+}
+
+#calendar .day{
+  min-height:92px;
+  padding:6px 5px;
+}
+
+#calendar .day-num{
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+#calendar .tag{
+  font-size:9.5px;
+  line-height:1.22;
+  padding:2px 4px;
+  margin-top:3px;
+}
+
+@media (max-width:540px){
+  #calendar{
+    margin-left:-4px;
+    margin-right:-4px;
+  }
+
+  #calendar .month-head{
+    padding:0 4px;
+  }
+
+  #calendar .calendar{
+    width:calc(100% + 8px);
+    margin-left:-4px;
+  }
+
+  #calendar .week div{
+    padding:10px 1px;
+    font-size:11px;
+  }
+
+  #calendar .day{
+    min-height:88px;
+    padding:5px 4px;
+  }
+
+  #calendar .day-num{
+    font-size:12px;
+  }
+
+  #calendar .tag{
+    font-size:9px;
+    padding:2px 3px;
+  }
+}
+
+@media (min-width:430px) and (max-width:540px){
+  #calendar .day{
+    min-height:96px;
+  }
+
+  #calendar .day-num{
+    font-size:13px;
+  }
+
+  #calendar .tag{
+    font-size:9.5px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -954,7 +1039,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v43</span></div>
+      <div class="jas-version">APP VERSION <span>v44</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1189,7 +1274,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v43</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v44</div>
       </div>
     </section>
 
@@ -4888,7 +4973,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=43',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=44',{
         updateViaCache:'none'
       });
 

@@ -577,7 +577,7 @@
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA</div>
+        <div class="sub" style="margin-top:6px">FC 우리풋살 · JASNAL PWA · v34</div>
       </div>
     </section>
 
@@ -3985,8 +3985,37 @@ window.addEventListener('appinstalled',()=>{
 });
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').catch(err=>console.error('SW registration failed',err));
+  let swReloading=false;
+
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(swReloading)return;
+    swReloading=true;
+    window.location.reload();
+  });
+
+  window.addEventListener('load',async ()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=34',{
+        updateViaCache:'none'
+      });
+
+      // GitHub Pages/PWA가 열린 상태에서도 새 배포를 빠르게 확인.
+      await reg.update();
+
+      // 탭이 다시 활성화되면 최신 SW 확인.
+      document.addEventListener('visibilitychange',()=>{
+        if(document.visibilityState==='visible'){
+          reg.update().catch(()=>{});
+        }
+      });
+
+      // 장시간 켜둔 앱도 주기적으로 최신 버전을 확인.
+      setInterval(()=>{
+        reg.update().catch(()=>{});
+      },30*60*1000);
+    }catch(err){
+      console.error('SW registration failed',err);
+    }
   });
 }
 

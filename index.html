@@ -347,6 +347,16 @@
     .member-chip{font-size:11px;padding:4px 8px;border-radius:999px;background:#f3f4f6;color:var(--text)}
     .member-card-actions{display:flex;gap:8px;margin-top:10px}
     .member-card-actions button{flex:1}
+    .match-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .match-form-grid label{margin-top:10px}
+    .match-duration{font-size:12px;color:var(--muted);margin-top:7px}
+    .match-quick-times{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .match-quick-times button{font-size:12px;padding:7px 9px}
+    .match-warning{font-size:12px;color:#dc2626;margin-top:8px;display:none}
+    @media (max-width:420px){
+      .match-form-grid{grid-template-columns:1fr}
+    }
+
     .member-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
     .sync-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
     .sync-status{font-size:12px;color:var(--muted);margin-top:8px}
@@ -906,10 +916,37 @@
       </div>
       <form id="matchForm">
         <input id="matchId" type="hidden">
-        <label>경기명<input id="matchTitle" value="정기 경기" required></label>
-        <label>날짜<input id="matchDate" type="date" value="2026-11-21" required></label>
-        <label>시작 시간<input id="matchTime" type="time" value="20:00" required></label>
-        <label>종료 시간<input id="matchEndTime" type="time" value="22:00" required></label>
+
+        <label>경기명
+          <input id="matchTitle" value="정기 경기" required>
+        </label>
+
+        <div class="match-form-grid">
+          <label>날짜
+            <input id="matchDate" type="date" required>
+          </label>
+          <label>시작 시간
+            <input id="matchTime" type="time" value="20:00" required>
+          </label>
+        </div>
+
+        <div class="match-form-grid">
+          <label>종료 시간
+            <input id="matchEndTime" type="time" value="22:00" required>
+          </label>
+          <div>
+            <div class="sub" style="margin-top:10px">빠른 시간 설정</div>
+            <div class="match-quick-times">
+              <button class="secondary quick-match-time" type="button" data-start="18:00" data-end="20:00">18~20</button>
+              <button class="secondary quick-match-time" type="button" data-start="20:00" data-end="22:00">20~22</button>
+              <button class="secondary quick-match-time" type="button" data-start="21:00" data-end="23:00">21~23</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="matchDurationText" class="match-duration">경기시간 2시간</div>
+        <div id="matchTimeWarning" class="match-warning">종료 시간은 시작 시간보다 늦어야 합니다.</div>
+
         <label>구장 검색
           <input id="matchVenueSearch" class="search" style="margin-top:5px" placeholder="구장명 검색">
         </label>
@@ -919,9 +956,13 @@
           </select>
         </label>
         <label id="matchPlaceManualWrap">장소 직접 입력
-          <input id="matchPlace" value="영종 풋살장 A구장" required>
+          <input id="matchPlace" placeholder="구장명을 입력하세요" required>
         </label>
-        <label>메모<input id="matchMemo" placeholder="예: 구장비 140,000원 / 19:50 집합"></label>
+
+        <label>메모
+          <input id="matchMemo" placeholder="예: 구장비 140,000원 / 19:50 집합">
+        </label>
+
         <button class="primary" type="submit">저장</button>
       </form>
       <div id="editDeleteWrap" style="display:none">
@@ -3180,6 +3221,16 @@ $('matchVenueSearch').addEventListener('input',()=>{
   populateMatchVenueSelect(current,$('matchVenueSearch').value);
 });
 
+
+$('matchTime').addEventListener('change',updateMatchDuration);
+$('matchEndTime').addEventListener('change',updateMatchDuration);
+
+document.querySelectorAll('.quick-match-time').forEach(btn=>btn.addEventListener('click',()=>{
+  $('matchTime').value=btn.dataset.start;
+  $('matchEndTime').value=btn.dataset.end;
+  updateMatchDuration();
+}));
+
 $('matchPlaceSelect').addEventListener('change',()=>{
   const val=$('matchPlaceSelect').value;
   if(val){
@@ -3190,6 +3241,48 @@ $('matchPlaceSelect').addEventListener('change',()=>{
     $('matchPlace').focus();
   }
 });
+
+
+function todayLocalYmd(){
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function timeToMinutes(value){
+  if(!value || !value.includes(':'))return null;
+  const [h,m]=value.split(':').map(Number);
+  return h*60+m;
+}
+
+function updateMatchDuration(){
+  const start=timeToMinutes($('matchTime')?.value);
+  const end=timeToMinutes($('matchEndTime')?.value);
+  const text=$('matchDurationText');
+  const warning=$('matchTimeWarning');
+  if(start===null || end===null){
+    if(text)text.textContent='';
+    if(warning)warning.style.display='none';
+    return true;
+  }
+
+  let diff=end-start;
+  if(diff<=0){
+    if(text)text.textContent='';
+    if(warning)warning.style.display='block';
+    return false;
+  }
+
+  if(warning)warning.style.display='none';
+  const hours=Math.floor(diff/60);
+  const mins=diff%60;
+  if(text){
+    text.textContent=`경기시간 ${hours?`${hours}시간`:''}${mins?` ${mins}분`:''}`.trim();
+  }
+  return true;
+}
 
 function openMatchModal(id=null, presetDate=null){
   const editing=id!==null;
@@ -3209,12 +3302,13 @@ function openMatchModal(id=null, presetDate=null){
   }else{
     $('matchId').value='';
     $('matchTitle').value='정기 경기';
-    $('matchDate').value=presetDate||state.selected||'2026-11-21';
+    $('matchDate').value=presetDate||state.selected||todayLocalYmd();
     $('matchTime').value='20:00';
     $('matchEndTime').value='22:00';
     populateMatchVenueSelect(state.venues[0]?.name||'');
     $('matchMemo').value='';
   }
+  updateMatchDuration();
   $('matchModal').classList.add('show');
   $('matchModal').setAttribute('aria-hidden','false');
 }
@@ -3260,6 +3354,18 @@ $('matchModal').addEventListener('click',e=>{if(e.target===$('matchModal'))close
 
 $('matchForm').addEventListener('submit',async e=>{
   e.preventDefault();
+
+  if(!updateMatchDuration()){
+    $('matchEndTime').focus();
+    return;
+  }
+
+  const selectedDate=$('matchDate').value;
+  if(!selectedDate){
+    $('matchDate').focus();
+    return;
+  }
+
   const item={
     id:$('matchId').value?Number($('matchId').value):Date.now(),
     title:$('matchTitle').value.trim(),
@@ -3288,7 +3394,9 @@ $('matchForm').addEventListener('submit',async e=>{
 $('deleteMatchBtn').addEventListener('click',async ()=>{
   const id=Number($('matchId').value);
   if(!id)return;
-  if(confirm('이 경기를 삭제할까요?')){
+  const target=state.matches.find(x=>x.id===id);
+  const label=target?`${target.title} · ${target.date} ${target.time}`:'이 경기';
+  if(confirm(`${label}\n정말 삭제할까요?`)){
     state.matches=state.matches.filter(x=>x.id!==id);
     saveState();
     if(remoteReady){ try{ await remoteDeleteMatch(id); }catch(err){ setSyncStatus('삭제 동기화 실패: '+err.message,false); } }

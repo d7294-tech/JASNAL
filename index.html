@@ -559,6 +559,12 @@
         <div class="dues-stat"><span class="sub">납부</span><b id="duesPaidCount" class="dues-paid">0</b></div>
         <div class="dues-stat"><span class="sub">미납</span><b id="duesUnpaidCount" class="dues-unpaid">0</b></div>
       </div>
+      <div class="card" style="padding:10px 12px;margin-bottom:10px">
+        <div class="row">
+          <span class="sub">선택월 기준 누적 미납액</span>
+          <b id="duesArrearsTotal" class="finance-expense">0원</b>
+        </div>
+      </div>
 
       <div class="row" style="margin-bottom:8px">
         <select id="duesMonthSelect" class="secondary" style="flex:1;min-height:44px"></select>
@@ -927,7 +933,7 @@
     <button class="nav-btn active" data-screen="home"><span class="ico">⌂</span>홈</button>
     <button class="nav-btn" data-screen="calendar"><span class="ico">▣</span>캘린더</button>
     <button class="nav-btn" data-screen="matches"><span class="ico">⚽</span>경기</button>
-    <button class="nav-btn" data-screen="members"><span class="ico">♙</span>회원</button>
+    <button class="nav-btn" data-screen="members"><span class="ico">♙</span>회비관리</button>
     <button class="nav-btn" data-screen="more"><span class="ico">•••</span>더보기</button>
   </nav>
 
@@ -2286,6 +2292,19 @@ function ensureDuesRows(monthKey){
   }
 }
 
+
+function getMemberArrears(memberId, throughMonth=currentMonthKey()){
+  const rows=state.duesPayments
+    .filter(d=>d.memberId===memberId && d.monthKey<=throughMonth && !d.paid)
+    .sort((a,b)=>a.monthKey.localeCompare(b.monthKey));
+
+  return {
+    count:rows.length,
+    amount:rows.reduce((sum,d)=>sum+Number(d.amount||state.duesSettings.amount||0),0),
+    months:rows.map(d=>d.monthKey)
+  };
+}
+
 function renderDues(){
   if(!$('duesList'))return;
   if(!$('duesMonthSelect').options.length) makeMonthOptions();
@@ -2306,6 +2325,12 @@ makeFinanceMonthOptions();
   $('duesTargetCount').textContent=activeDues.length;
   $('duesPaidCount').textContent=activeDues.filter(d=>d.paid).length;
   $('duesUnpaidCount').textContent=activeDues.filter(d=>!d.paid).length;
+  if($('duesArrearsTotal')){
+    const arrearsTotal=state.members
+      .filter(member=>member.status==='활동중')
+      .reduce((sum,member)=>sum+getMemberArrears(member.id,monthKey).amount,0);
+    $('duesArrearsTotal').textContent=`${arrearsTotal.toLocaleString()}원`;
+  }
 
   let members=[...state.members].filter(m=>m.status!=='승인대기');
 
@@ -2351,6 +2376,13 @@ makeFinanceMonthOptions();
         ${due?.paidAt
           ? `<div class="sub" style="margin-top:6px">납부일: ${new Date(due.paidAt).toLocaleDateString('ko-KR')}</div>`
           : ''}
+
+        ${isActive ? (()=>{ const ar=getMemberArrears(member.id,monthKey); return ar.count
+          ? `<div style="margin-top:8px;padding:9px 10px;border:1px solid #7f1d1d;border-radius:10px;background:#2a1719">
+               <div style="font-weight:800;color:#ff6b6b">누적 미납 ${ar.count}개월 · ${ar.amount.toLocaleString()}원</div>
+               <div class="sub" style="margin-top:3px">${ar.months.map(x=>{const [yy,mm]=x.split('-');return `${yy}.${Number(mm)}월`;}).join(' · ')}</div>
+             </div>`
+          : `<div class="sub" style="margin-top:7px;color:#34d399">누적 미납 없음</div>`; })() : ''}
 
         <div class="dues-actions">
           <button class="secondary edit-managed-member" data-id="${member.id}" type="button">수정</button>

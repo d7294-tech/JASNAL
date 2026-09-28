@@ -1,4 +1,4 @@
-const CACHE_NAME='jasnal-v5';
+const CACHE_NAME='jasnal-v6';
 const CORE=['./','./index.html','./manifest.webmanifest'];
 
 self.addEventListener('install',event=>{
@@ -44,4 +44,24 @@ self.addEventListener('notificationclick',event=>{
       if(clients.openWindow)return clients.openWindow(target);
     })
   );
+});
+
+
+self.addEventListener('push',event=>{
+  let data={};
+  try{
+    data=event.data ? event.data.json() : {};
+  }catch(e){
+    data={body:event.data ? event.data.text() : ''};
+  }
+
+  const title=data.title || 'FC 우리풋살';
+  const options={
+    body:data.body || '새 알림이 있습니다.',
+    tag:data.tag || 'jasnal-push',
+    data:{url:data.url || './'},
+    renotify:true
+  };
+
+  event.waitUntil(self.registration.showNotification(title,options));
 });

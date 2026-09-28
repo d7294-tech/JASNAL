@@ -483,11 +483,11 @@
 
       <div class="notify-card">
         <div class="title" style="font-size:16px">경기 알림</div>
-        <div class="sub" style="margin-top:4px">앱을 열어둔 상태 또는 실행 시 경기 알림을 확인합니다.</div>
+        <div class="sub" style="margin-top:4px">알림 등록 후 휴대폰 잠금/앱 종료 상태에서도 Push 알림을 받을 수 있습니다.</div>
 
         <div class="notify-row">
           <span>알림 사용</span>
-          <button id="enableNotificationsBtn" class="secondary" type="button">권한 요청</button>
+          <button id="enableNotificationsBtn" class="secondary" type="button">Push 알림 등록</button>
         </div>
 
         <div class="notify-row">
@@ -1598,8 +1598,75 @@ $('deleteVenueBtn').addEventListener('click',async ()=>{
 });
 
 
+const VAPID_PUBLIC_KEY='BAP1X6ayV2ax3nBUspDGDDFwwMfrohgQwImdHkC2NwXNIWjML_PlrS1OJ8uKabc5ZXhESR4QrRax2-K88VFRmX8';
 const REMINDER_MINUTES_KEY='jasnal_match_reminder_minutes';
 const NOTIFIED_MATCHES_KEY='jasnal_notified_matches';
+
+
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData=atob(base64);
+  return Uint8Array.from([...rawData].map(ch=>ch.charCodeAt(0)));
+}
+
+async function savePushSubscription(subscription){
+  if(!supabase || !currentUser) throw new Error('로그인이 필요합니다.');
+  const json=subscription.toJSON();
+  const endpoint=json.endpoint;
+  const p256dh=json.keys?.p256dh;
+  const authKey=json.keys?.auth;
+  if(!endpoint || !p256dh || !authKey) throw new Error('Push 구독정보를 읽지 못했습니다.');
+
+  const {error}=await supabase.from('push_subscriptions').upsert(
+    {
+      user_id:currentUser.id,
+      endpoint,
+      p256dh,
+      auth:authKey,
+      updated_at:new Date().toISOString()
+    },
+    {onConflict:'endpoint'}
+  );
+  if(error)throw error;
+}
+
+async function subscribeToPush(){
+  if(!('serviceWorker' in navigator)) throw new Error('이 브라우저는 Service Worker를 지원하지 않습니다.');
+  if(!('PushManager' in window)) throw new Error('이 브라우저는 Push 알림을 지원하지 않습니다.');
+  if(!currentUser) throw new Error('먼저 로그인해주세요.');
+  if(!isApproved()) throw new Error('가입 승인 후 알림을 사용할 수 있습니다.');
+
+  const permission=await Notification.requestPermission();
+  updateNotificationStatus();
+  if(permission!=='granted') throw new Error('알림 권한이 허용되지 않았습니다.');
+
+  const reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+
+  if(sub){
+    try{
+      const opts=sub.options;
+      const oldKey=opts?.applicationServerKey
+        ? btoa(String.fromCharCode(...new Uint8Array(opts.applicationServerKey))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
+        : '';
+      if(oldKey && oldKey!==VAPID_PUBLIC_KEY){
+        await sub.unsubscribe();
+        sub=null;
+      }
+    }catch(e){}
+  }
+
+  if(!sub){
+    sub=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+
+  await savePushSubscription(sub);
+  return sub;
+}
 
 function getReminderMinutes(){
   return Number(localStorage.getItem(REMINDER_MINUTES_KEY)||1440);
@@ -1614,17 +1681,28 @@ function setNotifiedMatches(obj){
   localStorage.setItem(NOTIFIED_MATCHES_KEY,JSON.stringify(obj));
 }
 
-function updateNotificationStatus(){
+async function updateNotificationStatus(){
   if(!$('notificationStatus'))return;
   if(!('Notification' in window)){
     $('notificationStatus').textContent='이 브라우저는 알림을 지원하지 않습니다.';
     return;
   }
   const p=Notification.permission;
-  $('notificationStatus').textContent=
-    p==='granted'?'알림 허용됨':
-    p==='denied'?'알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해주세요.':
-    '알림 권한이 아직 설정되지 않았습니다.';
+  if(p==='denied'){
+    $('notificationStatus').textContent='알림이 차단되어 있습니다. 브라우저 사이트 설정에서 허용해주세요.';
+    return;
+  }
+  if(p!=='granted'){
+    $('notificationStatus').textContent='알림 권한이 아직 설정되지 않았습니다.';
+    return;
+  }
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    $('notificationStatus').textContent=sub?'Push 알림 등록됨':'권한은 허용됨 · Push 등록 필요';
+  }catch(e){
+    $('notificationStatus').textContent='알림 허용됨';
+  }
 }
 
 async function requestNotificationPermission(){
@@ -1632,9 +1710,15 @@ async function requestNotificationPermission(){
     alert('이 브라우저는 알림을 지원하지 않습니다.');
     return;
   }
-  const result=await Notification.requestPermission();
-  updateNotificationStatus();
-  if(result==='granted') checkMatchReminders();
+  try{
+    $('notificationStatus').textContent='Push 알림 등록 중...';
+    await subscribeToPush();
+    $('notificationStatus').textContent='백그라운드 Push 알림 등록 완료';
+    checkMatchReminders();
+  }catch(err){
+    console.error(err);
+    $('notificationStatus').textContent='알림 등록 실패: '+(err?.message||'다시 시도해주세요.');
+  }
 }
 
 async function showMatchNotification(match){

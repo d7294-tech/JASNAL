@@ -1126,7 +1126,7 @@ function isManager(){
 }
 function isAdmin(){
   const role=String(currentMember?.role||'').trim();
-  return role==='관리자';
+  return role==='관리자' && currentMember?.status==='활동중';
 }
 function isApproved(){
   return currentMember && currentMember.status==='활동중';
@@ -1270,7 +1270,7 @@ function applyRoleVisibility(){
   if(cloudBox) cloudBox.style.display=adminOnly?'block':'none';
 
   // Other management areas: 운영진/관리자.
-  if($('addMember')) $('addMember').style.display=isStaff?'inline-block':'none';
+  if($('addMember')) $('addMember').style.display=adminOnly?'inline-block':'none';
   if($('newMatchBtn')) $('newMatchBtn').style.display=isStaff?'inline-block':'none';
   if($('deleteModeBtn')) $('deleteModeBtn').style.display=isStaff?'inline-block':'none';
   document.querySelectorAll('.edit-match,.edit-member').forEach(el=>el.style.display=isStaff?'block':'none');
@@ -1956,7 +1956,11 @@ $('deleteVenueBtn').addEventListener('click',async ()=>{
   const id=Number($('venueId').value);
   if(!id)return;
   const v=state.venues.find(x=>x.id===id);
-  if(v && confirm(`${v.name} 구장을 삭제할까요?`)){
+  const linkedMatches=v ? state.matches.filter(m=>m.place===v.name).length : 0;
+  const message=linkedMatches
+    ? `${v.name} 구장을 삭제할까요?\n연결된 경기 ${linkedMatches}건의 장소명은 그대로 유지됩니다.`
+    : `${v?.name||'이 구장'} 구장을 삭제할까요?`;
+  if(v && confirm(message)){
     state.venues=state.venues.filter(x=>x.id!==id);
     saveState();
     try{ await remoteDeleteVenue(id); }catch(err){ setSyncStatus('구장 삭제 동기화 실패: '+err.message,false); }
@@ -2656,12 +2660,12 @@ makeFinanceMonthOptions();
   }).join('') : '<div class="card"><div class="sub">표시할 회원이 없습니다.</div></div>';
 
   document.querySelectorAll('.edit-managed-member').forEach(b=>b.addEventListener('click',()=>{
-    if(!isManager())return;
+    if(!isAdmin()){ alert('관리자만 회원 정보를 수정할 수 있습니다.'); return; }
     openMemberModal(Number(b.dataset.id));
   }));
 
   document.querySelectorAll('.toggle-dues').forEach(b=>b.addEventListener('click',async ()=>{
-    if(!isManager())return;
+    if(!isAdmin()){ alert('관리자만 납부 상태를 변경할 수 있습니다.'); return; }
     if(isSettlementLocked(monthKey)){
       alert(`${monthKey} 정산이 마감되어 납부내역을 수정할 수 없습니다.`);
       return;
@@ -2682,7 +2686,7 @@ makeFinanceMonthOptions();
   }));
 
   $('duesSettingsBtn').style.display=isAdmin()?'inline-block':'none';
-  if($('addMember')) $('addMember').style.display=isManager()?'inline-block':'none';
+  if($('addMember')) $('addMember').style.display=isAdmin()?'inline-block':'none';
 }
 
 $('duesMonthSelect').addEventListener('change',renderDues);
@@ -3543,6 +3547,10 @@ function updateMatchDuration(){
 }
 
 function openMatchModal(id=null, presetDate=null){
+  if(!isManager()){
+    alert('운영진 이상 권한이 필요합니다.');
+    return;
+  }
   const editing=id!==null;
   $('matchModalTitle').textContent=editing?'경기 수정':'경기 등록';
   $('matchVenueSearch').value='';
@@ -3612,6 +3620,7 @@ $('matchModal').addEventListener('click',e=>{if(e.target===$('matchModal'))close
 
 $('matchForm').addEventListener('submit',async e=>{
   e.preventDefault();
+  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
 
   if(!updateMatchDuration()){
     $('matchEndTime').focus();
@@ -3650,6 +3659,7 @@ $('matchForm').addEventListener('submit',async e=>{
 });
 
 $('deleteMatchBtn').addEventListener('click',async ()=>{
+  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
   const id=Number($('matchId').value);
   if(!id)return;
   const target=state.matches.find(x=>x.id===id);
@@ -3698,7 +3708,7 @@ function renderMembers(){
   const pending=state.members.filter(m=>m.status==='승인대기');
   const queue=$('approvalQueue');
   if(queue){
-    queue.style.display=isManager() && pending.length ? 'block' : 'none';
+    queue.style.display=isAdmin() && pending.length ? 'block' : 'none';
     $('approvalList').innerHTML=pending.map(m=>`
       <div class="list-item">
         <div style="font-weight:800">${m.name}</div>
@@ -3715,23 +3725,23 @@ function renderMembers(){
 
   document.querySelectorAll('.approve-member').forEach(b=>b.addEventListener('click',async ()=>{
     const m=state.members.find(x=>x.id===Number(b.dataset.id));
-    if(!m || !isManager())return;
+    if(!m || !isAdmin())return;
     m.status='활동중';
     m.role='회원';
     saveState();
     try{ await remoteUpsertMember(m); }catch(err){ setSyncStatus('승인 동기화 실패: '+err.message,false); }
-    renderMembers();
+    if(remoteReady) await loadRemoteState(); else { renderMembers(); renderMatches(); }
   }));
 
   document.querySelectorAll('.reject-member').forEach(b=>b.addEventListener('click',async ()=>{
     const id=Number(b.dataset.id);
     const m=state.members.find(x=>x.id===id);
-    if(!m || !isManager())return;
+    if(!m || !isAdmin())return;
     if(confirm(`${m.name} 가입 신청을 거절할까요?`)){
       state.members=state.members.filter(x=>x.id!==id);
       saveState();
       try{ await remoteDeleteMember(id); }catch(err){ setSyncStatus('거절 동기화 실패: '+err.message,false); }
-      renderMembers();
+      if(remoteReady) await loadRemoteState(); else { renderMembers(); renderMatches(); }
     }
   }));
   applyRoleVisibility();
@@ -3739,16 +3749,29 @@ function renderMembers(){
 
 function openMemberModal(id=null){
   const editing=id!==null;
-  $('memberModalTitle').textContent=editing?'회원 수정':'회원 등록';
-  $('memberDeleteWrap').style.display=(editing && isManager())?'block':'none';
+  const target=editing ? state.members.find(x=>x.id===id) : null;
+  const selfEdit=!!(target && currentUser && target.authUserId===currentUser.id);
+  const selfCreate=!editing && !!currentUser && !currentMember;
+
+  if(editing && !isAdmin() && !selfEdit){
+    alert('관리자만 다른 회원 정보를 수정할 수 있습니다.');
+    return;
+  }
+  if(!editing && !isAdmin() && !selfCreate){
+    alert('관리자만 회원을 추가할 수 있습니다.');
+    return;
+  }
+
+  $('memberModalTitle').textContent=editing?(selfEdit && !isAdmin()?'내 정보 수정':'회원 수정'):(selfCreate?'회원 정보 등록':'회원 등록');
+  $('memberDeleteWrap').style.display=(editing && isAdmin() && !selfEdit)?'block':'none';
   const roleField=$('memberRole');
   const statusField=$('memberStatus');
-  const managerMode=isManager();
-  roleField.disabled=!managerMode;
-  statusField.disabled=!managerMode;
+  const adminMode=isAdmin();
+  roleField.disabled=!adminMode;
+  statusField.disabled=!adminMode;
 
   if(editing){
-    const m=state.members.find(x=>x.id===id);
+    const m=target;
     if(!m)return;
     $('memberId').value=m.id;
     $('memberAuthUserId').value=m.authUserId||'';
@@ -3774,7 +3797,7 @@ function closeMemberModal(){
   $('memberModal').setAttribute('aria-hidden','true');
 }
 
-$('addMember').addEventListener('click',()=>{ if(['운영진','관리자'].includes(currentMember?.role)) openMemberModal(); });
+$('addMember').addEventListener('click',()=>{ if(isAdmin()) openMemberModal(); else alert('관리자만 회원을 추가할 수 있습니다.'); });
 $('closeMemberModal').addEventListener('click',closeMemberModal);
 $('memberModal').addEventListener('click',e=>{
   if(e.target===$('memberModal')) closeMemberModal();
@@ -3784,14 +3807,21 @@ $('memberForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const editingId=$('memberId').value ? Number($('memberId').value) : null;
   const existing=editingId ? state.members.find(x=>x.id===editingId) : null;
-  const selfRegistration=!isManager() && (!existing || existing.authUserId===currentUser?.id);
+  const selfEdit=!!(existing && currentUser && existing.authUserId===currentUser.id);
+  const selfCreate=!existing && !!currentUser && !currentMember;
+
+  if(!isAdmin() && !selfEdit && !selfCreate){
+    alert('관리자만 다른 회원 정보를 변경할 수 있습니다.');
+    return;
+  }
+
   const item={
     id:editingId || Date.now(),
     name:$('memberName').value.trim(),
     group:$('memberGroup').value,
-    role:selfRegistration ? (existing?.role||'회원') : $('memberRole').value,
-    status:selfRegistration ? (existing?.status||'승인대기') : $('memberStatus').value,
-    authUserId:$('memberAuthUserId').value||null
+    role:isAdmin() ? $('memberRole').value : (existing?.role||'회원'),
+    status:isAdmin() ? $('memberStatus').value : (existing?.status||'승인대기'),
+    authUserId:$('memberAuthUserId').value||currentUser?.id||null
   };
   if(!item.name)return;
 
@@ -3810,15 +3840,24 @@ $('memberForm').addEventListener('submit',async e=>{
     }catch(err){ setSyncStatus('회원 저장 동기화 실패: '+err.message,false); }
   }
   closeMemberModal();
-  renderMembers();
-  renderDues();
-  renderMemberDuesSummary();
+  if(remoteReady) await loadRemoteState();
+  else {
+    renderMembers();
+    renderDues();
+    renderMemberDuesSummary();
+    renderMatches();
+  }
 });
 
 $('deleteMemberBtn').addEventListener('click',async ()=>{
+  if(!isAdmin()){ alert('관리자만 회원을 삭제할 수 있습니다.'); return; }
   const id=Number($('memberId').value);
   if(!id)return;
   const m=state.members.find(x=>x.id===id);
+  if(m?.authUserId && m.authUserId===currentUser?.id){
+    alert('현재 로그인한 관리자 계정은 여기서 삭제할 수 없습니다.');
+    return;
+  }
   if(m && confirm(`${m.name} 회원을 삭제할까요?`)){
     state.members=state.members.filter(x=>x.id!==id);
     saveState();
@@ -3826,9 +3865,13 @@ $('deleteMemberBtn').addEventListener('click',async ()=>{
       try{ await remoteDeleteMember(id); }catch(err){ setSyncStatus('회원 삭제 동기화 실패: '+err.message,false); }
     }
     closeMemberModal();
-    renderMembers();
-    renderDues();
-    renderMemberDuesSummary();
+    if(remoteReady) await loadRemoteState();
+    else {
+      renderMembers();
+      renderDues();
+      renderMemberDuesSummary();
+      renderMatches();
+    }
   }
 });
 

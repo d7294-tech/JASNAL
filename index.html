@@ -1111,8 +1111,12 @@ function renderAuthState(){
 }
 
 function applyRoleVisibility(){
-  const adminOnly=isAdmin();
+  const approved=currentMember?.status==='활동중';
+  const role=approved ? String(currentMember?.role||'회원').trim() : '회원';
+  const adminOnly=role==='관리자';
+  const isStaff=adminOnly || role==='운영진';
 
+  // More > 회원 관리 / 정산 마감: 관리자만.
   if($('openDuesBtn')){
     $('openDuesBtn').style.display=adminOnly?'block':'none';
   }
@@ -1121,16 +1125,11 @@ function applyRoleVisibility(){
     $('toggleSettlementLockBtn').style.display=adminOnly?'inline-block':'none';
   }
 
-  const approved=currentMember?.status==='활동중';
-  const role=approved ? (currentMember?.role||'회원') : '회원';
-  const isAdmin=role==='관리자';
-  const isStaff=isAdmin || role==='운영진';
-
   // Cloud connection credentials/settings: administrator only.
   const cloudBox=$('cloudAdminBox');
-  if(cloudBox) cloudBox.style.display=isAdmin?'block':'none';
+  if(cloudBox) cloudBox.style.display=adminOnly?'block':'none';
 
-  // Management areas: staff (운영진/관리자) only.
+  // Other management areas: 운영진/관리자.
   if($('addMember')) $('addMember').style.display=isStaff?'inline-block':'none';
   if($('newMatchBtn')) $('newMatchBtn').style.display=isStaff?'inline-block':'none';
   if($('deleteModeBtn')) $('deleteModeBtn').style.display=isStaff?'inline-block':'none';

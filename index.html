@@ -2897,7 +2897,7 @@ function refreshHome(){
     placeEl.textContent='';
     if($('homeVenueInfoBtn')) $('homeVenueInfoBtn').style.display='none';
     ddayEl.style.display='none';
-    document.querySelectorAll('.vote').forEach(b=>{
+    document.querySelectorAll('.vote[data-vote]').forEach(b=>{
       const strong=b.querySelector('strong');
       if(strong) strong.textContent='0';
       b.classList.remove('active');
@@ -2909,7 +2909,7 @@ function refreshHome(){
   }
 
   const homeClosed=isMatchClosed(next);
-  document.querySelectorAll('.vote').forEach(b=>b.disabled=homeClosed);
+  document.querySelectorAll('.vote[data-vote]').forEach(b=>b.disabled=homeClosed);
 
   const [y,m,d]=next.date.split('-').map(Number);
   const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
@@ -2929,15 +2929,15 @@ function refreshHome(){
   ddayEl.textContent=diff===0?'D-DAY':(diff>0?`D-${diff}`:`D+${Math.abs(diff)}`);
 
   if(!next.attendance) next.attendance={yes:0,no:0,maybe:0,myVote:null};
-  const votes=document.querySelectorAll('.vote');
+  const voteButtons=document.querySelectorAll('.vote[data-vote]');
   const vals=[next.attendance.yes||0,next.attendance.no||0,next.attendance.maybe||0];
   const activeMemberCount=state.members.filter(m=>m.status==='활동중').length;
   const noVoteCount=Math.max(0,activeMemberCount-vals.reduce((a,b)=>a+Number(b||0),0));
-  if($('homeNoVoteCount'))$('homeNoVoteCount').textContent=noVoteCount;
+  if($('homeNoVoteCount'))$('homeNoVoteCount').textContent=String(noVoteCount);
   const map={참석:'yes',불참:'no',미정:'maybe'};
-  votes.forEach((b,i)=>{
+  voteButtons.forEach((b,i)=>{
     const strong=b.querySelector('strong');
-    if(strong)strong.textContent=vals[i];
+    if(strong)strong.textContent=String(vals[i]||0);
     b.classList.toggle('active', next.attendance.myVote===map[b.dataset.vote]);
   });
   $('voteMsg').textContent=homeClosed

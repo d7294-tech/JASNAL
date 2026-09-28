@@ -296,18 +296,18 @@
     .settlement-item span{display:block;font-size:11px;color:var(--muted)}
     .settlement-item b{display:block;margin-top:4px;font-size:15px}
     .settlement-total{grid-column:1/-1;background:var(--green-soft);border-color:var(--green)}
-    .match-detail-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:12px}
-    .attendance-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
-    .attendance-box{border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
-    .attendance-box b{display:block;font-size:16px;margin-top:3px}
-    .attendance-group{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
-    .attendance-person{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
-    .attendance-person:last-child{border-bottom:0}
-    .vote-chip{font-size:11px;border-radius:999px;padding:3px 8px;border:1px solid var(--line)}
-    .vote-chip.attend{color:#059669}
-    .vote-chip.absent{color:#dc2626}
-    .vote-chip.undecided{color:#a16207}
-    .vote-chip.none{color:var(--muted)}
+    .attendance-detail{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px}
+    .attendance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+    .attendance-grid .item{border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+    .attendance-grid .item b{display:block;font-size:16px;margin-top:3px}
+    .attendance-group-select{width:100%;min-height:42px;margin-bottom:8px}
+    .attendance-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)}
+    .attendance-row:last-child{border-bottom:0}
+    .vote-pill{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:3px 8px}
+    .vote-pill.attend{color:#34d399}
+    .vote-pill.absent{color:#f87171}
+    .vote-pill.undecided{color:#f59e0b}
+    .vote-pill.none{color:var(--muted)}
 
     .venue-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
     .venue-title{font-weight:800;font-size:16px}
@@ -392,6 +392,21 @@
         </div>
         <div id="voteMsg" class="sub" style="margin-top:10px">참석 여부를 선택하세요.</div>
         <button id="homeVoteListBtn" class="attendance-view-btn" type="button" id="homeVotePeopleBtn">투표 인원 보기</button>
+        <div id="attendanceDetailPanel" class="attendance-detail" style="display:none">
+          <div class="row">
+            <div class="title" style="font-size:15px">투표 인원</div>
+            <button id="closeAttendanceDetailBtn" class="secondary" type="button">닫기</button>
+          </div>
+          <div id="attendanceDetailSummary" class="attendance-grid"></div>
+          <select id="attendanceGroupFilter" class="secondary attendance-group-select">
+            <option value="">전체 그룹</option>
+            <option value="OFFICE">OFFICE</option>
+            <option value="1그룹">1그룹</option>
+            <option value="2그룹">2그룹</option>
+            <option value="3그룹">3그룹</option>
+          </select>
+          <div id="attendanceDetailList"></div>
+        </div>
       </div>
 
       <button class="home-link" data-go="calendar">
@@ -1327,11 +1342,6 @@ async function remoteDeleteMatch(id){
 }
 
 async function remoteSetVote(matchId,vote){
-  const targetMatch=state.matches.find(m=>Number(m.id)===Number(matchId));
-  if(targetMatch && isMatchClosed(targetMatch)){
-    throw new Error('종료된 경기는 투표를 수정할 수 없습니다.');
-  }
-
   if(!remoteReady || !currentUser) throw new Error('로그인이 필요합니다.');
   const voter=currentUser.id;
   if(!vote){
@@ -1747,10 +1757,16 @@ function closeVenueModal(){
 
 
 
-if($('homeVotePeopleBtn'))$('homeVotePeopleBtn').addEventListener('click',openHomeAttendanceDetail);
-if($('closeHomeAttendanceDetail'))$('closeHomeAttendanceDetail').addEventListener('click',()=>{
-  $('homeAttendanceDetail').style.display='none';
+if($('homeVotePeopleBtn'))$('homeVotePeopleBtn').addEventListener('click',()=>{
+  if($('attendanceDetailPanel')){
+    $('attendanceDetailPanel').style.display='block';
+    renderAttendanceDetail();
+  }
 });
+if($('closeAttendanceDetailBtn'))$('closeAttendanceDetailBtn').addEventListener('click',()=>{
+  $('attendanceDetailPanel').style.display='none';
+});
+if($('attendanceGroupFilter'))$('attendanceGroupFilter').addEventListener('change',renderAttendanceDetail);
 
 $('openSettingsBtn').addEventListener('click',async ()=>{
   showScreen('settings');
@@ -2439,29 +2455,7 @@ function getMemberArrears(memberId, throughMonth=currentMonthKey()){
 
 function renderDues(){
   if(!$('duesList'))return;
-  if(!$('duesMonthSelect').options.length) 
-document.addEventListener('click',e=>{
-  const btn=e.target.closest('.view-voters,.vote-people-btn,[data-action="view-voters"]');
-  if(!btn)return;
-  const matchId=Number(btn.dataset.id||btn.dataset.matchId||0);
-  if(!matchId)return;
-
-  const detail=getAttendanceBreakdown(matchId);
-  const lines=[];
-  ['OFFICE','1그룹','2그룹','3그룹'].forEach(group=>{
-    const people=detail.all.filter(x=>x.member.group===group);
-    if(!people.length)return;
-    lines.push(`\n[${group}]`);
-    people.forEach(x=>lines.push(`${x.member.name} - ${x.vote||'미투표'}`));
-  });
-
-  alert(
-    `참석 ${detail.attend.length} / 불참 ${detail.absent.length} / 미정 ${detail.undecided.length} / 미투표 ${detail.none.length}`+
-    lines.join('\n')
-  );
-});
-
-makeMonthOptions();
+  if(!$('duesMonthSelect').options.length) makeMonthOptions();
 makeFinanceMonthOptions();
 
   const monthKey=$('duesMonthSelect').value||currentMonthKey();
@@ -2914,9 +2908,9 @@ function closeVenueInfoModal(){
 }
 
 
-function getVoteForMember(matchId, member){
+function findMemberVote(matchId, member){
   if(!member)return null;
-  const candidateIds=[
+  const ids=[
     member.authUserId,
     member.auth_user_id,
     member.userId,
@@ -2926,68 +2920,67 @@ function getVoteForMember(matchId, member){
   const vote=state.votes.find(v=>{
     if(Number(v.matchId)!==Number(matchId))return false;
     const voter=String(v.voter||v.userId||v.user_id||'');
-    return candidateIds.includes(voter);
+    return ids.includes(voter);
   });
   return vote?.vote||null;
 }
 
-function getAttendanceBreakdown(matchId){
-  const activeMembers=state.members.filter(m=>m.status==='활동중');
-  const rows=activeMembers.map(member=>({
-    member,
-    vote:getVoteForMember(matchId,member)
-  }));
-
+function getAttendanceState(matchId){
+  const members=state.members.filter(m=>m.status==='활동중');
+  const all=members.map(member=>({member,vote:findMemberVote(matchId,member)}));
   return {
-    attend:rows.filter(x=>x.vote==='참석'),
-    absent:rows.filter(x=>x.vote==='불참'),
-    undecided:rows.filter(x=>x.vote==='미정'),
-    none:rows.filter(x=>!x.vote),
-    all:rows
+    all,
+    attend:all.filter(x=>x.vote==='참석'),
+    absent:all.filter(x=>x.vote==='불참'),
+    undecided:all.filter(x=>x.vote==='미정'),
+    none:all.filter(x=>!x.vote)
   };
 }
 
-function attendanceChip(vote){
-  if(vote==='참석')return '<span class="vote-chip attend">참석</span>';
-  if(vote==='불참')return '<span class="vote-chip absent">불참</span>';
-  if(vote==='미정')return '<span class="vote-chip undecided">미정</span>';
-  return '<span class="vote-chip none">미투표</span>';
+function votePill(vote){
+  if(vote==='참석')return '<span class="vote-pill attend">참석</span>';
+  if(vote==='불참')return '<span class="vote-pill absent">불참</span>';
+  if(vote==='미정')return '<span class="vote-pill undecided">미정</span>';
+  return '<span class="vote-pill none">미투표</span>';
 }
 
-function renderAttendanceDetail(matchId, summaryEl, groupsEl){
-  const detail=getAttendanceBreakdown(matchId);
-  if(summaryEl){
-    summaryEl.innerHTML=`
-      <div class="attendance-box"><span class="sub">참석</span><b>${detail.attend.length}</b></div>
-      <div class="attendance-box"><span class="sub">불참</span><b>${detail.absent.length}</b></div>
-      <div class="attendance-box"><span class="sub">미정</span><b>${detail.undecided.length}</b></div>
-      <div class="attendance-box"><span class="sub">미투표</span><b>${detail.none.length}</b></div>`;
-  }
-
-  if(groupsEl){
-    const groups=['OFFICE','1그룹','2그룹','3그룹'];
-    groupsEl.innerHTML=groups.map(group=>{
-      const people=detail.all.filter(x=>x.member.group===group);
-      return `
-        <div class="attendance-group">
-          <div style="font-weight:800;margin-bottom:6px">${group} <span class="sub">${people.length}명</span></div>
-          ${people.length ? people.map(x=>`
-            <div class="attendance-person">
-              <span>${x.member.name}</span>
-              ${attendanceChip(x.vote)}
-            </div>`).join('') : '<div class="sub">해당 그룹 인원이 없습니다.</div>'}
-        </div>`;
-    }).join('');
-  }
+function getNextMatchSafe(){
+  const now=new Date();
+  const upcoming=[...state.matches]
+    .filter(m=>parseLocalDateTime(m.date,m.time)>now)
+    .sort((a,b)=>parseLocalDateTime(a.date,a.time)-parseLocalDateTime(b.date,b.time));
+  return upcoming[0]||null;
 }
 
-function openHomeAttendanceDetail(){
-  const match=getNextMatch?.() || getUpcomingMatches?.()?.[0] || null;
+function renderAttendanceDetail(){
+  const match=getNextMatchSafe();
   if(!match)return;
-  const box=$('homeAttendanceDetail');
-  if(!box)return;
-  renderAttendanceDetail(match.id,$('homeAttendanceSummary'),$('homeAttendanceGroups'));
-  box.style.display='block';
+  const data=getAttendanceState(match.id);
+
+  if($('attendanceDetailSummary')){
+    $('attendanceDetailSummary').innerHTML=`
+      <div class="item"><span class="sub">참석</span><b>${data.attend.length}</b></div>
+      <div class="item"><span class="sub">불참</span><b>${data.absent.length}</b></div>
+      <div class="item"><span class="sub">미정</span><b>${data.undecided.length}</b></div>
+      <div class="item"><span class="sub">미투표</span><b>${data.none.length}</b></div>`;
+  }
+
+  const group=$('attendanceGroupFilter')?.value||'';
+  const rows=group ? data.all.filter(x=>x.member.group===group) : data.all;
+
+  if($('attendanceDetailList')){
+    $('attendanceDetailList').innerHTML=rows.length ? rows
+      .sort((a,b)=>(a.member.name||'').localeCompare(b.member.name||'','ko'))
+      .map(x=>`
+        <div class="attendance-row">
+          <div>
+            <div style="font-weight:700">${x.member.name}</div>
+            <div class="sub" style="margin-top:2px">${x.member.group}</div>
+          </div>
+          ${votePill(x.vote)}
+        </div>`).join('')
+      : '<div class="sub">표시할 인원이 없습니다.</div>';
+  }
 }
 
 function refreshHome(){
@@ -3045,17 +3038,6 @@ function refreshHome(){
     : (next.attendance.myVote
       ? `내 선택: ${{yes:'참석',no:'불참',maybe:'미정'}[next.attendance.myVote]}`
       : '참석 여부를 선택하세요.');
-  try{
-    const nextMatch=getNextMatch?.() || getUpcomingMatches?.()?.[0] || null;
-    if(nextMatch){
-      const att=getAttendanceBreakdown(nextMatch.id);
-      const hint=document.querySelector('#home .next-match-card .sub:last-child');
-      if(hint && att.none.length){
-        hint.textContent=`미투표 ${att.none.length}명 · 참석 여부를 선택하세요.`;
-      }
-    }
-  }catch(e){}
-
 }
 
 

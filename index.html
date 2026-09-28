@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="JASNAL" />
   <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
@@ -1039,7 +1041,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v47</span></div>
+      <div class="jas-version">APP VERSION <span>v48</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1274,7 +1276,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v47</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v48</div>
       </div>
     </section>
 
@@ -1424,6 +1426,7 @@ textarea{
           </div>
           <button id="installAppBtn" class="secondary" type="button">설치</button>
         </div>
+        <div id="installHint" class="sub" style="margin-top:8px">설치 버튼이 바로 뜨지 않으면 브라우저 메뉴의 홈 화면 추가/앱 설치를 이용하세요.</div>
       </div>
 
       <div class="auth-panel">
@@ -5037,10 +5040,14 @@ let deferredInstallPrompt=null;
 function getInstallHelpText(){
   const ua=navigator.userAgent||'';
   const isIOS=/iPhone|iPad|iPod/i.test(ua);
+  const isSamsung=/SamsungBrowser/i.test(ua);
   if(isIOS){
-    return 'iPhone/iPad: Safari 하단 공유 버튼 → 홈 화면에 추가를 선택하세요.';
+    return 'iPhone/iPad는 Safari에서 설치하세요. Safari 하단 공유 버튼 → 홈 화면에 추가.';
   }
-  return 'Android Chrome: 오른쪽 위 ⋮ 메뉴 → 앱 설치 또는 홈 화면에 추가를 선택하세요.';
+  if(isSamsung){
+    return '삼성 인터넷: 메뉴(≡) → 현재 페이지 추가 → 홈 화면 또는 앱 설치.';
+  }
+  return 'Android Chrome: 오른쪽 위 ⋮ 메뉴 → 앱 설치 또는 홈 화면에 추가.';
 }
 
 window.addEventListener('beforeinstallprompt',e=>{
@@ -5084,7 +5091,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=47',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=48',{
         updateViaCache:'none'
       });
 

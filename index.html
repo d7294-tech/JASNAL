@@ -711,7 +711,7 @@
 
       <div class="card menu" style="padding:0;margin-top:12px">
         <button id="openVenuesBtn" type="button">구장 정보</button>
-        <button id="openDuesBtn" class="manager-only" type="button">회원 관리</button>
+        <button id="openDuesBtn" style="display:none" class="manager-only" type="button">회원 관리</button>
         <button id="openNoticesBtn" type="button">공지사항</button>
         <button id="openSettingsBtn" type="button">설정</button>
       </div>
@@ -985,7 +985,8 @@ function isManager(){
   return currentMember && (currentMember.role==='운영진' || currentMember.role==='관리자') && currentMember.status==='활동중';
 }
 function isAdmin(){
-  return currentMember && currentMember.role==='관리자' && currentMember.status==='활동중';
+  const role=String(currentMember?.role||'').trim();
+  return role==='관리자';
 }
 function isApproved(){
   return currentMember && currentMember.status==='활동중';
@@ -1110,6 +1111,16 @@ function renderAuthState(){
 }
 
 function applyRoleVisibility(){
+  const adminOnly=isAdmin();
+
+  if($('openDuesBtn')){
+    $('openDuesBtn').style.display=adminOnly?'block':'none';
+  }
+
+  if($('toggleSettlementLockBtn')){
+    $('toggleSettlementLockBtn').style.display=adminOnly?'inline-block':'none';
+  }
+
   const approved=currentMember?.status==='활동중';
   const role=approved ? (currentMember?.role||'회원') : '회원';
   const isAdmin=role==='관리자';
@@ -2529,7 +2540,7 @@ $('duesFilter').addEventListener('change',renderDues);
 $('duesGroupFilter').addEventListener('change',renderDues);
 
 $('openDuesBtn').addEventListener('click',()=>{
-  if(!isManager()){ alert('운영진 이상 권한이 필요합니다.'); return; }
+  if(!isAdmin()){ alert('관리자만 회원 관리에 접근할 수 있습니다.'); return; }
   showScreen('dues');
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
   const moreBtn=document.querySelector('.nav-btn[data-screen="more"]');

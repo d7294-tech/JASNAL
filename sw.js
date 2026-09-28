@@ -1,4 +1,4 @@
-const CACHE_NAME='jasnal-v22';
+const CACHE_NAME='jasnal-v23';
 const CORE=['./','./index.html','./manifest.webmanifest'];
 
 self.addEventListener('install',event=>{

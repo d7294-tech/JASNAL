@@ -860,27 +860,37 @@
         </div>
         <button id="closeVoteListModal" class="secondary" type="button">닫기</button>
       </div>
-      <select id="voteGroupFilter" class="search" style="margin:12px 0 10px">
-        <option value="">전체 그룹</option>
-        <option value="OFFICE">OFFICE</option>
-        <option value="1그룹">1그룹</option>
-        <option value="2그룹">2그룹</option>
-        <option value="3그룹">3그룹</option>
-      </select>
+      <div class="row" style="margin:12px 0 10px">
+        <select id="voteGroupFilter" class="search" style="flex:1;margin:0">
+          <option value="">전체 그룹</option>
+          <option value="OFFICE">OFFICE</option>
+          <option value="1그룹">1그룹</option>
+          <option value="2그룹">2그룹</option>
+          <option value="3그룹">3그룹</option>
+        </select>
+        <select id="voteStatusFilter" class="search" style="flex:1;margin:0">
+          <option value="">전체 상태</option>
+          <option value="yes">참석</option>
+          <option value="no">불참</option>
+          <option value="maybe">미정</option>
+          <option value="none">미투표</option>
+        </select>
+      </div>
+      <div class="sub" style="margin-bottom:8px">그룹과 상태를 함께 선택해 원하는 인원만 확인할 수 있습니다.</div>
       <div class="vote-list-grid">
-        <div class="vote-list-section">
+        <div id="voteYesSection" class="vote-list-section">
           <div id="voteYesTitle" class="vote-list-title">참석 0명</div>
           <div id="voteYesList" class="vote-name-list"></div>
         </div>
-        <div class="vote-list-section">
+        <div id="voteNoSection" class="vote-list-section">
           <div id="voteNoTitle" class="vote-list-title">불참 0명</div>
           <div id="voteNoList" class="vote-name-list"></div>
         </div>
-        <div class="vote-list-section">
+        <div id="voteMaybeSection" class="vote-list-section">
           <div id="voteMaybeTitle" class="vote-list-title">미정 0명</div>
           <div id="voteMaybeList" class="vote-name-list"></div>
         </div>
-        <div class="vote-list-section">
+        <div id="voteNoneSection" class="vote-list-section">
           <div id="voteNoneTitle" class="vote-list-title">미투표 0명</div>
           <div id="voteNoneList" class="vote-name-list"></div>
         </div>
@@ -1579,6 +1589,11 @@ $('homeVoteListBtn').addEventListener('click',()=>{
 });
 
 if($('voteGroupFilter'))$('voteGroupFilter').addEventListener('change',()=>{
+  const matchId=Number($('voteListModal').dataset.matchId||0);
+  if(matchId)renderVoteListModal(matchId);
+});
+
+if($('voteStatusFilter'))$('voteStatusFilter').addEventListener('change',()=>{
   const matchId=Number($('voteListModal').dataset.matchId||0);
   if(matchId)renderVoteListModal(matchId);
 });
@@ -2969,6 +2984,7 @@ function openVoteListModal(matchId){
 
   $('voteListModal').dataset.matchId=String(matchId);
   if($('voteGroupFilter'))$('voteGroupFilter').value='';
+  if($('voteStatusFilter'))$('voteStatusFilter').value='';
   renderVoteListModal(matchId);
 
   $('voteListModal').classList.add('show');
@@ -3011,6 +3027,19 @@ function renderVoteListModal(matchId){
   renderNames('voteNoList',noNames);
   renderNames('voteMaybeList',maybeNames);
   renderNames('voteNoneList',noneNames);
+
+  const status=$('voteStatusFilter')?.value||'';
+  const sectionMap={
+    yes:'voteYesSection',
+    no:'voteNoSection',
+    maybe:'voteMaybeSection',
+    none:'voteNoneSection'
+  };
+
+  Object.entries(sectionMap).forEach(([key,id])=>{
+    const el=$(id);
+    if(el)el.style.display=(!status || status===key)?'block':'none';
+  });
 }
 
 function closeVoteListModal(){

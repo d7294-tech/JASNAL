@@ -752,14 +752,185 @@ textarea{
   }
 }
 
+
+/* v42 — JASNAL sports branding + clearer mobile navigation */
+.jas-login-brand{
+  min-height:220px;
+  padding:28px 20px 24px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  background:
+    radial-gradient(circle at 70% 18%,rgba(255,116,23,.15),transparent 24%),
+    linear-gradient(145deg,#030303 0%,#090909 66%,#1a0a02 100%);
+  border:1px solid rgba(255,116,23,.72);
+  box-shadow:inset 0 0 0 1px rgba(255,116,23,.06),0 18px 42px rgba(0,0,0,.28);
+}
+.jas-login-brand:before{
+  content:'';
+  position:absolute;
+  inset:auto -18px -34px auto;
+  width:140px;height:140px;
+  border:1px solid rgba(255,116,23,.10);
+  transform:rotate(45deg);
+}
+.jas-mark{
+  color:#ff7417;
+  font-size:58px;
+  line-height:.9;
+  font-weight:1000;
+  letter-spacing:-8px;
+  transform:skew(-6deg);
+  text-shadow:0 0 24px rgba(255,116,23,.12);
+}
+.jas-wordmark{
+  margin-top:16px;
+  color:#ff7417;
+  font-size:34px;
+  line-height:1;
+  font-weight:1000;
+  font-style:italic;
+  letter-spacing:1px;
+}
+.jas-version{
+  margin-top:14px;
+  color:#b1b1b1;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:1.4px;
+}
+.jas-version span{
+  display:inline-block;
+  margin-left:6px;
+  padding:3px 9px;
+  color:#ff8a32;
+  border:1px solid #6c3210;
+  border-radius:999px;
+  background:#190b03;
+}
+
+.jas-home-hero{
+  min-height:150px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:22px 20px;
+  border:1px solid rgba(255,116,23,.78);
+  background:
+    radial-gradient(circle at 78% 30%,rgba(255,116,23,.14),transparent 25%),
+    linear-gradient(145deg,#030303 0%,#090909 64%,#1c0c03 100%);
+}
+.jas-home-hero:after{display:none}
+.hero-copy{position:relative;z-index:2}
+.hero-wordmark{
+  color:#ff7417;
+  font-size:30px;
+  font-style:italic;
+  font-weight:1000;
+  letter-spacing:.6px;
+}
+.hero-tagline{
+  margin-top:8px;
+  color:#8f8f8f;
+  font-size:11px;
+  letter-spacing:4px;
+  font-weight:800;
+}
+.hero-jas{
+  position:relative;
+  z-index:1;
+  color:rgba(255,116,23,.16);
+  font-size:62px;
+  font-weight:1000;
+  letter-spacing:-8px;
+  transform:skew(-7deg);
+}
+
+.jas-nav{
+  min-height:72px;
+  padding-top:5px;
+  border-top:1px solid #2f2f2f;
+  box-shadow:0 -10px 30px rgba(0,0,0,.22);
+}
+.jas-nav .nav-btn{
+  min-height:68px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  font-size:11px;
+}
+.nav-svg{
+  width:25px;
+  height:25px;
+  margin:0!important;
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+}
+.nav-svg svg{
+  width:25px;
+  height:25px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.9;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.jas-nav .nav-btn.active .nav-svg{
+  filter:drop-shadow(0 0 5px rgba(255,116,23,.28));
+}
+.jas-nav .nav-btn.active{
+  color:#ff7417!important;
+}
+.jas-nav .nav-btn:not(.active){
+  color:#8f8f8f!important;
+}
+
+.auth-landing-card{
+  border-color:#373737!important;
+  box-shadow:0 18px 36px rgba(0,0,0,.22);
+}
+.auth-landing-tabs button.active{
+  background:linear-gradient(135deg,#ff6810,#ff8c33)!important;
+  color:#050505!important;
+  box-shadow:0 6px 14px rgba(255,116,23,.18);
+}
+.auth-landing-submit{
+  min-height:48px;
+  background:linear-gradient(135deg,#ff6810,#ff8c33)!important;
+  color:#050505!important;
+  font-size:15px;
+}
+.auth-landing input{
+  border-radius:13px!important;
+}
+
+@media (max-width:540px){
+  .auth-landing{padding-top:18px}
+  .jas-login-brand{min-height:190px;border-radius:20px}
+  .jas-mark{font-size:50px}
+  .jas-wordmark{font-size:30px}
+  .jas-home-hero{min-height:126px;border-radius:18px}
+  .hero-wordmark{font-size:27px}
+  .hero-jas{font-size:54px}
+  .jas-nav{min-height:74px}
+  .jas-nav .nav-btn{min-height:70px;font-size:11px}
+  .nav-svg,.nav-svg svg{width:26px;height:26px}
+}
+
 </style>
 </head>
 <body>
 
   <section id="authLanding" class="auth-landing">
-    <div class="auth-landing-brand">
-      <h1>JASNAL</h1>
-      <p>APP VERSION · v41</p>
+    <div class="auth-landing-brand jas-login-brand">
+      <div class="jas-mark">JAS</div>
+      <div class="jas-wordmark">JASNAL</div>
+      <div class="jas-version">APP VERSION <span>v42</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -804,9 +975,12 @@ textarea{
 
   <main id="appMain" class="app" style="display:none">
     <section id="home" class="screen active">
-      <div class="hero">
-        <h1>JASNAL</h1>
-        <p>함께 뛰는 즐거움</p>
+      <div class="hero jas-home-hero">
+        <div class="hero-copy">
+          <div class="hero-wordmark">JASNAL</div>
+          <div class="hero-tagline">PLAY TOGETHER</div>
+        </div>
+        <div class="hero-jas">JAS</div>
       </div>
 
       <div class="card">
@@ -991,7 +1165,7 @@ textarea{
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v41</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v42</div>
       </div>
     </section>
 
@@ -1496,12 +1670,22 @@ textarea{
     </div>
   </div>
 
-  <nav id="appNav" class="nav" style="display:none">
-    <button class="nav-btn active" data-screen="home"><span class="ico">⌂</span>홈</button>
-    <button class="nav-btn" data-screen="calendar"><span class="ico">▣</span>캘린더</button>
-    <button class="nav-btn" data-screen="matches"><span class="ico">⚽</span>경기</button>
-    <button class="nav-btn" data-screen="members"><span class="ico">♙</span>회비관리</button>
-    <button class="nav-btn" data-screen="more"><span class="ico">•••</span>더보기</button>
+  <nav id="appNav" class="nav jas-nav" style="display:none">
+    <button class="nav-btn active" data-screen="home">
+      <span class="ico nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>홈
+    </button>
+    <button class="nav-btn" data-screen="calendar">
+      <span class="ico nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v3M19 3v3M3.5 8.5h17M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg></span>캘린더
+    </button>
+    <button class="nav-btn" data-screen="matches">
+      <span class="ico nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 7 3 2-.8 3.5H9.8L9 9zM7 13l2.8-.5M17 13l-2.8-.5M9 18l.8-3M15 18l-.8-3"/></svg></span>경기
+    </button>
+    <button class="nav-btn" data-screen="members">
+      <span class="ico nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg></span>회비관리
+    </button>
+    <button class="nav-btn" data-screen="more">
+      <span class="ico nav-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></span>더보기
+    </button>
   </nav>
 
 <script type="module">
@@ -4680,7 +4864,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=41',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=42',{
         updateViaCache:'none'
       });
 

@@ -1,4 +1,4 @@
-const CACHE_NAME='jasnal-v50';
+const CACHE_NAME='jasnal-v51';
 const CORE=['./','./index.html','./manifest.webmanifest','./jas-logo.png','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install',event=>{
@@ -36,4 +36,21 @@ self.addEventListener('notificationclick',event=>{
     }
     if(clients.openWindow)return clients.openWindow(target);
   }));
+});
+
+
+self.addEventListener('push',event=>{
+  let data={};
+  try{ data=event.data ? event.data.json() : {}; }
+  catch(e){ data={body:event.data ? event.data.text() : ''}; }
+
+  const title=data.title||'JASNAL';
+  const options={
+    body:data.body||'새 알림이 있습니다.',
+    icon:'./icon-192.png',
+    badge:'./icon-192.png',
+    tag:data.tag||'jasnal-push',
+    data:{url:data.url||'./'}
+  };
+  event.waitUntil(self.registration.showNotification(title,options));
 });

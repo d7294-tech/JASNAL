@@ -1095,7 +1095,7 @@ textarea{
     <div class="auth-landing-brand jas-login-brand">
       <img class="jas-logo-image login-logo" src="./jas-logo.png" alt="JAS">
       <div class="jas-wordmark">JASNAL</div>
-      <div class="jas-version">APP VERSION <span>v50</span></div>
+      <div class="jas-version">APP VERSION <span>v51</span></div>
     </div>
 
     <div class="auth-landing-card">
@@ -1337,11 +1337,23 @@ textarea{
         </div>
 
         <div id="notificationStatus" class="sync-status"></div>
+
+        <div id="adminSignupNotifyRow" class="notify-row" style="display:none;border-top:1px solid #2a2a2a;margin-top:10px;padding-top:12px">
+          <span>
+            <b>신규 가입신청 알림</b>
+            <div class="sub" style="margin-top:3px">관리자에게 승인대기 Push 알림</div>
+          </span>
+          <label style="display:flex;align-items:center;gap:7px;margin:0">
+            <input id="adminSignupNotify" type="checkbox" style="width:20px;height:20px">
+            사용
+          </label>
+        </div>
+        <div id="adminSignupNotifyStatus" class="sync-status"></div>
       </div>
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v50</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v51</div>
       </div>
     </section>
 
@@ -2098,6 +2110,8 @@ function applyRoleVisibility(){
   // Cloud connection credentials/settings: administrator only.
   const cloudBox=$('cloudAdminBox');
   if(cloudBox) cloudBox.style.display=adminOnly?'block':'none';
+  if($('adminSignupNotifyRow')) $('adminSignupNotifyRow').style.display=adminOnly?'flex':'none';
+  if($('adminSignupNotifyStatus')) $('adminSignupNotifyStatus').style.display=adminOnly?'block':'none';
   if($('backupAdminCard')) $('backupAdminCard').style.display=adminOnly?'block':'none';
 
   // Other management areas: 운영진/관리자.
@@ -2858,6 +2872,7 @@ $('openSettingsBtn').addEventListener('click',async ()=>{
 
   $('matchReminderTiming').value=String(getReminderMinutes());
   if(currentUser)await loadNotificationPreference();
+  if(isAdmin()) await loadAdminSignupNotificationPreference();
   updateNotificationStatus();
 });
 
@@ -3059,6 +3074,55 @@ async function saveNotificationPreference(enabled=true){
 
   if(error)throw error;
 }
+
+
+async function loadAdminSignupNotificationPreference(){
+  if(!supabase || !currentUser || !isAdmin())return;
+  const el=$('adminSignupNotify');
+  const status=$('adminSignupNotifyStatus');
+  const {data,error}=await supabase
+    .from('admin_notification_preferences')
+    .select('signup_notifications')
+    .eq('user_id',currentUser.id)
+    .maybeSingle();
+  if(error){
+    if(status) status.textContent='가입신청 알림 설정 조회 실패: '+error.message;
+    return;
+  }
+  if(el) el.checked=!!data?.signup_notifications;
+  if(status) status.textContent=data?.signup_notifications
+    ? '신규 가입신청 Push 알림 사용 중'
+    : '신규 가입신청 Push 알림 꺼짐';
+}
+
+async function saveAdminSignupNotificationPreference(enabled){
+  if(!supabase || !currentUser || !isAdmin()) throw new Error('관리자만 설정할 수 있습니다.');
+  if(enabled){
+    // Push subscription must exist for the current admin.
+    await subscribeToPush();
+  }
+  const {error}=await supabase
+    .from('admin_notification_preferences')
+    .upsert({
+      user_id:currentUser.id,
+      signup_notifications:!!enabled,
+      updated_at:new Date().toISOString()
+    },{onConflict:'user_id'});
+  if(error)throw error;
+}
+
+if($('adminSignupNotify')) $('adminSignupNotify').addEventListener('change',async e=>{
+  const enabled=!!e.target.checked;
+  const status=$('adminSignupNotifyStatus');
+  try{
+    if(status) status.textContent=enabled?'Push 알림 등록 및 설정 저장 중...':'설정 저장 중...';
+    await saveAdminSignupNotificationPreference(enabled);
+    if(status) status.textContent=enabled?'신규 가입신청 Push 알림 사용 중':'신규 가입신청 Push 알림 꺼짐';
+  }catch(err){
+    e.target.checked=!enabled;
+    if(status) status.textContent='설정 실패: '+(err?.message||err);
+  }
+});
 
 function getReminderMinutes(){
   return Number(localStorage.getItem(REMINDER_MINUTES_KEY)||1440);
@@ -4884,6 +4948,21 @@ $('memberForm').addEventListener('submit',async e=>{
   if(remoteReady){
     try{
       await remoteUpsertMember(item);
+      if(selfCreate && item.status==='승인대기'){
+        try{
+          await supabase.from('admin_notifications').insert({
+            type:'signup_request',
+            member_id:item.id,
+            member_name:item.name,
+            group_name:item.group,
+            title:'신규 가입 신청',
+            body:`${item.name}님이 가입을 신청했습니다. 회원관리에서 승인해주세요.`,
+            created_by:currentUser?.id||null
+          });
+        }catch(pushQueueErr){
+          console.error('signup notification queue failed',pushQueueErr);
+        }
+      }
       if(currentUser && item.authUserId===currentUser.id){
         currentMember=item;
         renderAuthState();
@@ -5193,7 +5272,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=50',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=51',{
         updateViaCache:'none'
       });
 

@@ -623,8 +623,12 @@
               <div class="title" style="font-size:15px">월별 정산</div>
               <div id="financeSettlementMonth" class="sub" style="margin-top:4px"></div>
             </div>
-            <button id="exportFinanceCsvBtn" class="secondary" type="button">CSV</button>
+            <div style="display:flex;gap:8px">
+              <button id="toggleSettlementLockBtn" class="secondary" type="button">정산 마감</button>
+              <button id="exportFinanceCsvBtn" class="secondary" type="button">CSV</button>
+            </div>
           </div>
+          <div id="settlementLockStatus" class="sub" style="margin-top:8px"></div>
           <div class="settlement-grid">
             <div class="settlement-item"><span>전월 이월</span><b id="settlementOpening">0원</b></div>
             <div class="settlement-item"><span>회비 수입</span><b id="settlementDuesIncome" class="finance-income">0원</b></div>
@@ -949,6 +953,7 @@ const state={
   duesPayments:[],
   duesSettings:{amount:30000,dueDay:10},
   financeTransactions:[],
+  settlementLocks:{},
   venues:[],
   matches:[
     {id:1,title:'정기 경기',date:'2026-11-21',time:'20:00',endTime:'22:00',place:'영종 풋살장 A구장',memo:'',attendance:{yes:12,no:3,maybe:5,myVote:null}}
@@ -1133,6 +1138,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'dues_payments'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'club_settings'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'finance_transactions'},scheduleRemoteReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'settlement_locks'},scheduleRemoteReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'venues'},scheduleRemoteReload)
     .subscribe();
 }
@@ -1153,7 +1159,8 @@ async function loadRemoteState(){
       {data:duesPayments,error:de},
       {data:clubSettings,error:cse},
       {data:venues,error:vne},
-      {data:financeTransactions,error:fte}
+      {data:financeTransactions,error:fte},
+      {data:settlementLocks,error:sle}
     ] = await Promise.all([
       supabase.from('matches').select('*').order('match_date',{ascending:true}),
       supabase.from('members').select('*').order('name',{ascending:true}),
@@ -1162,9 +1169,10 @@ async function loadRemoteState(){
       supabase.from('dues_payments').select('*').order('month_key',{ascending:false}),
       supabase.from('club_settings').select('*').eq('key','dues').maybeSingle(),
       supabase.from('venues').select('*').order('name',{ascending:true}),
-      supabase.from('finance_transactions').select('*').order('txn_date',{ascending:false}).order('created_at',{ascending:false})
+      supabase.from('finance_transactions').select('*').order('txn_date',{ascending:false}).order('created_at',{ascending:false}),
+      supabase.from('settlement_locks').select('*')
     ]);
-    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;if(vne)throw vne;if(fte)throw fte;
+    if(me)throw me;if(mbe)throw mbe;if(ve)throw ve;if(ne)throw ne;if(de)throw de;if(cse)throw cse;if(vne)throw vne;if(fte)throw fte;if(sle)throw sle;
 
     const mine=currentUser?.id||deviceId();
     const memberNameByAuthId={};
@@ -1251,6 +1259,15 @@ async function loadRemoteState(){
       createdBy:t.created_by||null,
       createdAt:t.created_at||null
     }));
+
+    state.settlementLocks={};
+    (settlementLocks||[]).forEach(x=>{
+      state.settlementLocks[x.month_key]={
+        locked:!!x.locked,
+        lockedAt:x.locked_at||null,
+        lockedBy:x.locked_by||null
+      };
+    });
 
     saveState();
     rebuildEventsFromMatches();
@@ -1399,6 +1416,23 @@ async function remoteDeleteFinanceTransaction(id){
   if(error)throw error;
 }
 
+
+async function remoteSetSettlementLock(monthKey, locked){
+  if(!remoteReady)return;
+  const payload={
+    month_key:monthKey,
+    locked:!!locked,
+    locked_at:locked?new Date().toISOString():null,
+    locked_by:locked?(currentUser?.id||null):null
+  };
+  const {error}=await supabase.from('settlement_locks').upsert(payload,{onConflict:'month_key'});
+  if(error)throw error;
+}
+
+function isSettlementLocked(monthKey){
+  return !!state.settlementLocks?.[monthKey]?.locked;
+}
+
 function saveState(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -1408,6 +1442,7 @@ function saveState(){
       duesPayments: state.duesPayments,
       duesSettings: state.duesSettings,
       financeTransactions: state.financeTransactions,
+      settlementLocks: state.settlementLocks,
       venues: state.venues
     }));
   }catch(e){}
@@ -1428,6 +1463,7 @@ function loadState(){
     if(Array.isArray(saved.duesPayments)) state.duesPayments=saved.duesPayments;
     if(saved.duesSettings) state.duesSettings=saved.duesSettings;
     if(Array.isArray(saved.financeTransactions)) state.financeTransactions=saved.financeTransactions;
+    if(saved.settlementLocks && typeof saved.settlementLocks==='object') state.settlementLocks=saved.settlementLocks;
     if(Array.isArray(saved.venues)) state.venues=saved.venues;
   }catch(e){}
 }
@@ -2067,6 +2103,18 @@ function calculateMonthlySettlement(monthKey){
 
 function renderMonthlySettlement(monthKey){
   if(!$('settlementOpening'))return;
+  const locked=isSettlementLocked(monthKey);
+  const info=state.settlementLocks?.[monthKey];
+  if($('settlementLockStatus')){
+    $('settlementLockStatus').textContent=locked
+      ? `정산 마감됨${info?.lockedAt?` · ${new Date(info.lockedAt).toLocaleString('ko-KR')}`:''}`
+      : '정산 미마감';
+  }
+  if($('toggleSettlementLockBtn')){
+    $('toggleSettlementLockBtn').textContent=locked?'마감 해제':'정산 마감';
+    $('toggleSettlementLockBtn').style.display=isAdmin()?'inline-block':'none';
+  }
+  if($('addFinanceTxnBtn'))$('addFinanceTxnBtn').disabled=locked;
   const x=calculateMonthlySettlement(monthKey);
   const [y,m]=monthKey.split('-');
   $('financeSettlementMonth').textContent=`${y}년 ${Number(m)}월`;
@@ -2122,6 +2170,41 @@ function exportFinanceCsv(){
 
 $('exportFinanceCsvBtn').addEventListener('click',exportFinanceCsv);
 
+$('toggleSettlementLockBtn').addEventListener('click',async ()=>{
+  if(!isAdmin()){
+    alert('관리자만 정산 마감/해제를 할 수 있습니다.');
+    return;
+  }
+
+  const monthKey=$('financeMonthSelect').value||currentMonthKey();
+  const currentlyLocked=isSettlementLocked(monthKey);
+  const nextLocked=!currentlyLocked;
+
+  const msg=nextLocked
+    ? `${monthKey} 정산을 마감할까요?\n마감 후 해당 월의 납부내역과 회비 사용내역은 수정할 수 없습니다.`
+    : `${monthKey} 정산 마감을 해제할까요?`;
+
+  if(!confirm(msg))return;
+
+  state.settlementLocks[monthKey]={
+    locked:nextLocked,
+    lockedAt:nextLocked?new Date().toISOString():null,
+    lockedBy:nextLocked?(currentUser?.id||null):null
+  };
+  saveState();
+
+  try{
+    await remoteSetSettlementLock(monthKey,nextLocked);
+    setSyncStatus(nextLocked?'정산 마감 완료':'정산 마감 해제 완료',true);
+  }catch(err){
+    setSyncStatus('정산 마감 저장 실패: '+(err?.message||err),false);
+  }
+
+  renderDues();
+  renderFinanceLedger();
+});
+
+
 function renderFinanceLedger(){
   if(!$('financeLedgerList'))return;
   if(!$('financeMonthSelect').options.length)makeFinanceMonthOptions();
@@ -2152,7 +2235,7 @@ function renderFinanceLedger(){
       </div>
       ${isManager()?`
       <div class="ledger-actions">
-        <button class="secondary edit-finance-txn" data-id="${t.id}" type="button">수정</button>
+        <button class="secondary edit-finance-txn" data-id="${t.id}" type="button" ${isSettlementLocked(monthKey)?'disabled':''}>${isSettlementLocked(monthKey)?'정산 마감':'수정'}</button>
       </div>`:''}
     </div>`).join('') : '<div class="sub">해당 월 사용내역이 없습니다.</div>';
 
@@ -2166,6 +2249,11 @@ function renderFinanceLedger(){
 
 function openFinanceTxnModal(id=null){
   if(!isManager()){alert('운영진 이상 권한이 필요합니다.');return;}
+  const selectedMonth=$('financeMonthSelect')?.value||currentMonthKey();
+  if(isSettlementLocked(selectedMonth)){
+    alert(`${selectedMonth} 정산이 마감되어 사용내역을 수정할 수 없습니다.`);
+    return;
+  }
   const editing=id!==null;
   $('financeTxnModalTitle').textContent=editing?'회비 사용내역 수정':'회비 사용내역 등록';
   $('financeTxnDeleteWrap').style.display=editing?'block':'none';
@@ -2204,6 +2292,11 @@ $('financeTxnModal').addEventListener('click',e=>{if(e.target===$('financeTxnMod
 $('financeTxnForm').addEventListener('submit',async e=>{
   e.preventDefault();
   if(!isManager())return;
+  const txnMonth=String($('financeTxnDate').value||'').slice(0,7);
+  if(isSettlementLocked(txnMonth)){
+    alert(`${txnMonth} 정산이 마감되어 저장할 수 없습니다.`);
+    return;
+  }
 
   const id=$('financeTxnId').value?Number($('financeTxnId').value):Date.now();
   const existing=state.financeTransactions.find(x=>x.id===id);
@@ -2236,6 +2329,11 @@ $('financeTxnForm').addEventListener('submit',async e=>{
 
 $('deleteFinanceTxnBtn').addEventListener('click',async ()=>{
   if(!isManager())return;
+  const txnMonth=String($('financeTxnDate').value||'').slice(0,7);
+  if(isSettlementLocked(txnMonth)){
+    alert(`${txnMonth} 정산이 마감되어 삭제할 수 없습니다.`);
+    return;
+  }
   const id=Number($('financeTxnId').value);
   if(!id)return;
   const t=state.financeTransactions.find(x=>x.id===id);
@@ -2352,6 +2450,7 @@ makeFinanceMonthOptions();
   $('duesList').innerHTML=members.length ? members.map(member=>{
     const due=activeDues.find(d=>d.memberId===member.id);
     const isActive=member.status==='활동중';
+    const monthLocked=isSettlementLocked(monthKey);
 
     return `
       <div class="list-item">
@@ -2387,7 +2486,7 @@ makeFinanceMonthOptions();
         <div class="dues-actions">
           <button class="secondary edit-managed-member" data-id="${member.id}" type="button">수정</button>
           ${isActive
-            ? `<button class="secondary toggle-dues" data-id="${due?.id||''}" type="button">${due?.paid?'미납으로 변경':'납부 처리'}</button>`
+            ? `<button class="secondary toggle-dues" data-id="${due?.id||''}" type="button" ${monthLocked?'disabled':''}>${monthLocked?'정산 마감':(due?.paid?'미납으로 변경':'납부 처리')}</button>`
             : ''}
         </div>
       </div>`;
@@ -2400,6 +2499,10 @@ makeFinanceMonthOptions();
 
   document.querySelectorAll('.toggle-dues').forEach(b=>b.addEventListener('click',async ()=>{
     if(!isManager())return;
+    if(isSettlementLocked(monthKey)){
+      alert(`${monthKey} 정산이 마감되어 납부내역을 수정할 수 없습니다.`);
+      return;
+    }
     const d=state.duesPayments.find(x=>x.id===Number(b.dataset.id));
     if(!d)return;
     d.paid=!d.paid;

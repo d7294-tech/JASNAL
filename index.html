@@ -452,6 +452,18 @@
         <div id="calendarGrid" class="cal"></div>
       </div>
 
+      <div id="calendarDayPanel" class="card" style="display:none;margin-top:12px">
+        <div class="row">
+          <div>
+            <div class="title" style="font-size:16px">경기 예약 현황</div>
+            <div id="calendarDayPanelDate" class="sub" style="margin-top:4px"></div>
+          </div>
+          <button id="calendarDayPanelClose" class="secondary" type="button">닫기</button>
+        </div>
+        <div id="calendarDayPanelBody" style="margin-top:12px"></div>
+        <button id="calendarDayBookBtn" class="primary" type="button" style="display:none">+ 경기 예약</button>
+      </div>
+
       </section>
 
     
@@ -2917,11 +2929,69 @@ function renderCalendar(){
       btn.appendChild(tag);
     });
 
-    btn.addEventListener('click',()=>openCalendarMatchModal(k));
+    btn.addEventListener('click',()=>showCalendarDayPanel(k));
     grid.appendChild(btn);
   }
 }
 
+
+
+function showCalendarDayPanel(k){
+  state.selected=k;
+
+  const panel=$('calendarDayPanel');
+  const dateEl=$('calendarDayPanelDate');
+  const body=$('calendarDayPanelBody');
+  const bookBtn=$('calendarDayBookBtn');
+  if(!panel || !dateEl || !body)return;
+
+  const [y,m,d]=k.split('-').map(Number);
+  const dow=['일','월','화','수','목','금','토'][new Date(Date.UTC(y,m-1,d)).getUTCDay()];
+  dateEl.textContent=`${y}년 ${m}월 ${d}일 (${dow})`;
+
+  const matches=state.matches
+    .filter(x=>x.date===k)
+    .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+
+  body.innerHTML=matches.length
+    ? matches.map(match=>`
+      <div class="calendar-match-card">
+        <div class="row">
+          <div style="min-width:0">
+            <div style="font-weight:800">${match.title}</div>
+            <div class="sub" style="margin-top:5px">${match.time}${match.endTime?` ~ ${match.endTime}`:''}</div>
+            <div class="sub" style="margin-top:3px">${match.place}</div>
+          </div>
+          <span class="status">${isMatchClosed(match)?'종료':'예약'}</span>
+        </div>
+        ${match.memo?`<div class="sub" style="margin-top:8px">메모: ${match.memo}</div>`:''}
+        <div class="calendar-match-actions">
+          <button class="secondary calendar-panel-vote" data-id="${match.id}" type="button">투표 현황</button>
+          ${(!isMatchClosed(match) && isManager())?`<button class="secondary calendar-panel-edit" data-id="${match.id}" type="button">수정</button>`:''}
+        </div>
+      </div>`).join('')
+    : '<div class="sub">예약된 경기가 없습니다.</div>';
+
+  if(bookBtn){
+    bookBtn.style.display=isManager()?'block':'none';
+    bookBtn.dataset.date=k;
+  }
+
+  panel.style.display='block';
+
+  document.querySelectorAll('.calendar-panel-vote').forEach(btn=>btn.addEventListener('click',()=>{
+    openVoteListModal(Number(btn.dataset.id));
+  }));
+
+  document.querySelectorAll('.calendar-panel-edit').forEach(btn=>btn.addEventListener('click',()=>{
+    openMatchModal(Number(btn.dataset.id));
+  }));
+}
+
+function hideCalendarDayPanel(){
+  const panel=$('calendarDayPanel');
+  if(panel)panel.style.display='none';
+}
 
 function openCalendarMatchModal(k){
   state.selected=k;
@@ -2986,6 +3056,17 @@ function selectDate(k){
 
 
 
+
+$('calendarDayPanelClose').addEventListener('click',hideCalendarDayPanel);
+$('calendarDayBookBtn').addEventListener('click',()=>{
+  if(!isManager()){
+    alert('운영진 이상 권한이 필요합니다.');
+    return;
+  }
+  const date=$('calendarDayBookBtn').dataset.date||state.selected||todayLocalYmd();
+  openMatchModal(null,date);
+});
+
 $('closeCalendarMatchModal').addEventListener('click',closeCalendarMatchModal);
 $('calendarMatchModal').addEventListener('click',e=>{
   if(e.target===$('calendarMatchModal'))closeCalendarMatchModal();
@@ -3001,12 +3082,14 @@ $('calendarBookMatchBtn').addEventListener('click',()=>{
 });
 
 $('prevMonth').addEventListener('click',()=>{
+  hideCalendarDayPanel();
   state.month--;
   if(state.month<0){state.month=11;state.year--;}
   selectDate(dateKey(state.year,state.month,1));
 });
 
 $('nextMonth').addEventListener('click',()=>{
+  hideCalendarDayPanel();
   state.month++;
   if(state.month>11){state.month=0;state.year++;}
   selectDate(dateKey(state.year,state.month,1));

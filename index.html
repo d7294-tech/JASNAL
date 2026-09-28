@@ -440,6 +440,77 @@
   .auth-landing-submit{width:100%;margin-top:14px}
   .auth-landing-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:12px}
 
+
+/* v40 — JAS uniform inspired dark/orange theme */
+:root{
+  --green:#ff7417;
+  --green-dark:#050505;
+  --green-soft:#2b1609;
+  --line:#3b3b3b;
+  --bg:#111111;
+  --card:#1a1a1a;
+  --text:#f4f4f5;
+  --muted:#9ca3af;
+  --morning:#17232b;
+  --afternoon:#352408;
+  --off:#242424;
+  --jas-orange:#ff7417;
+  --jas-orange-2:#ff8a32;
+}
+html{background:#080808;color-scheme:dark}
+body{background:#111;color:var(--text)}
+.app{background:#111}
+.hero{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#050505 0%,#0b0b0b 58%,#1c0d03 100%);
+  border:1px solid #4a260e;
+  box-shadow:inset 0 0 0 1px rgba(255,116,23,.05);
+  padding:22px 20px;
+}
+.hero:after{
+  content:'JAS';position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  color:rgba(255,116,23,.08);font-weight:1000;font-style:italic;font-size:52px;letter-spacing:-6px;
+}
+.hero h1{color:var(--jas-orange);font-weight:950;letter-spacing:.5px}
+.hero p{color:#c9c9c9}
+.card,.home-link,.list-item,.calendar,.auth-landing-card{
+  background:linear-gradient(180deg,#1c1c1c,#171717);
+  border-color:#3a3a3a;
+  box-shadow:0 8px 28px rgba(0,0,0,.16);
+}
+.title{color:#f5f5f5}.sub{color:#9ca3af}
+.pill{background:#2c1609;color:#ff8a32;border:1px solid #6f3511}
+.vote{background:#181818;border-color:#3b3b3b;color:#f3f4f6}
+.vote.active{background:#2c1609;border-color:var(--jas-orange);color:#fff}
+.home-link{color:var(--text)}
+.primary{background:linear-gradient(135deg,#ff6810,#ff8b2f);color:#090909;box-shadow:0 7px 18px rgba(255,116,23,.16)}
+.secondary,.match-tab,.month-head button{background:#1a1a1a;border-color:#414141;color:#f4f4f5}
+.match-tab.active{background:#2c1609;border-color:var(--jas-orange);color:#ff8a32}
+.nav{background:rgba(10,10,10,.96);border-color:#333;backdrop-filter:blur(14px)}
+.nav button{background:transparent!important;color:#858585}
+.nav button.active{color:var(--jas-orange);font-weight:900}
+.calendar{background:#161616}.week div{background:#191919;border-color:#333}.day{background:#171717;border-color:#303030;color:#eee}.day.blank{background:#121212}.day.selected{outline-color:var(--jas-orange)}
+.dot{background:var(--jas-orange)}.match-star{color:var(--jas-orange)}
+.field{background:#171717}.field select,input,select,textarea,.search{background:#181818!important;color:#f4f4f5!important;border-color:#414141!important}
+input::placeholder,textarea::placeholder{color:#777}
+.auth-landing{min-height:100vh;padding-top:30px;background:radial-gradient(circle at 82% 12%,rgba(255,116,23,.10),transparent 26%),linear-gradient(160deg,#050505 0%,#111 55%,#170b03 100%)}
+.auth-landing-brand{
+  position:relative;overflow:hidden;
+  min-height:132px;display:flex;flex-direction:column;justify-content:flex-end;
+  background:linear-gradient(135deg,#030303,#0b0b0b 65%,#251004);
+  border:1px solid #5d2b0d;color:#fff;
+}
+.auth-landing-brand:before{content:'JAS';position:absolute;right:18px;top:5px;color:rgba(255,116,23,.10);font-size:82px;font-weight:1000;font-style:italic;letter-spacing:-9px}
+.auth-landing-brand h1{position:relative;color:var(--jas-orange);font-size:28px;font-weight:950;letter-spacing:1px}
+.auth-landing-brand p{position:relative;color:#aaa;font-weight:700;letter-spacing:.7px}
+.auth-landing-tabs{background:#111;border-radius:14px;padding:4px;gap:4px}
+.auth-landing-tabs button{border:0;background:transparent;color:#aaa}
+.auth-landing-tabs button.active{background:linear-gradient(135deg,#ff6810,#ff8b2f);color:#080808;border:0}
+.auth-landing-card{border-color:#3b3b3b}
+.auth-landing label{color:#d6d6d6}
+.sync-ok{color:#ff8a32!important}
+@media (max-width:540px){.app{padding-left:14px;padding-right:14px}.auth-landing{padding-left:18px;padding-right:18px}}
+
 </style>
 </head>
 <body>
@@ -447,7 +518,7 @@
   <section id="authLanding" class="auth-landing">
     <div class="auth-landing-brand">
       <h1>JASNAL</h1>
-      <p>APP VERSION · v39</p>
+      <p>APP VERSION · v40</p>
     </div>
 
     <div class="auth-landing-card">
@@ -679,7 +750,7 @@
 
       <div class="card" style="margin-top:12px">
         <div class="title" style="font-size:16px">앱 정보</div>
-        <div class="sub" style="margin-top:6px">JASNAL · PWA · v39</div>
+        <div class="sub" style="margin-top:6px">JASNAL · PWA · v40</div>
       </div>
     </section>
 
@@ -4368,7 +4439,7 @@ if('serviceWorker' in navigator){
 
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=39',{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=40',{
         updateViaCache:'none'
       });
 

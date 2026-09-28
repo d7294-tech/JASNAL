@@ -291,6 +291,11 @@
     .ledger-meta{font-size:11px;color:var(--muted);margin-top:4px}
     .ledger-actions{display:flex;gap:8px;margin-top:10px}
     .ledger-actions button{flex:1}
+    .settlement-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+    .settlement-item{background:#f9fafb;border:1px solid var(--line);border-radius:12px;padding:10px}
+    .settlement-item span{display:block;font-size:11px;color:var(--muted)}
+    .settlement-item b{display:block;margin-top:4px;font-size:15px}
+    .settlement-total{grid-column:1/-1;background:var(--green-soft);border-color:var(--green)}
     .venue-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}
     .venue-title{font-weight:800;font-size:16px}
     .venue-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
@@ -592,6 +597,23 @@
             <option value="income">수입</option>
             <option value="expense">지출</option>
           </select>
+        </div>
+
+        <div class="card" style="margin:0 0 12px;padding:12px">
+          <div class="row">
+            <div>
+              <div class="title" style="font-size:15px">월별 정산</div>
+              <div id="financeSettlementMonth" class="sub" style="margin-top:4px"></div>
+            </div>
+            <button id="exportFinanceCsvBtn" class="secondary" type="button">CSV</button>
+          </div>
+          <div class="settlement-grid">
+            <div class="settlement-item"><span>전월 이월</span><b id="settlementOpening">0원</b></div>
+            <div class="settlement-item"><span>회비 수입</span><b id="settlementDuesIncome" class="finance-income">0원</b></div>
+            <div class="settlement-item"><span>기타 수입</span><b id="settlementOtherIncome" class="finance-income">0원</b></div>
+            <div class="settlement-item"><span>지출</span><b id="settlementExpense" class="finance-expense">0원</b></div>
+            <div class="settlement-item settlement-total"><span>월말 잔액</span><b id="settlementClosing" class="finance-balance">0원</b></div>
+          </div>
         </div>
 
         <div id="financeLedgerList" class="list"></div>
@@ -1984,6 +2006,104 @@ function renderFinanceSummaryForMembers(){
   $('memberMonthExpense').textContent=`${x.monthExpense.toLocaleString()}원`;
 }
 
+
+function calculateBalanceBeforeMonth(monthKey){
+  const dues=state.duesPayments
+    .filter(d=>d.paid && d.monthKey < monthKey)
+    .reduce((sum,d)=>sum+Number(d.amount||0),0);
+
+  const income=state.financeTransactions
+    .filter(t=>t.type==='income' && String(t.date||'').slice(0,7) < monthKey)
+    .reduce((sum,t)=>sum+Number(t.amount||0),0);
+
+  const expense=state.financeTransactions
+    .filter(t=>t.type==='expense' && String(t.date||'').slice(0,7) < monthKey)
+    .reduce((sum,t)=>sum+Number(t.amount||0),0);
+
+  return dues + income - expense;
+}
+
+function calculateMonthlySettlement(monthKey){
+  const opening=calculateBalanceBeforeMonth(monthKey);
+
+  const duesIncome=state.duesPayments
+    .filter(d=>d.paid && d.monthKey===monthKey)
+    .reduce((sum,d)=>sum+Number(d.amount||0),0);
+
+  const otherIncome=state.financeTransactions
+    .filter(t=>t.type==='income' && String(t.date||'').slice(0,7)===monthKey)
+    .reduce((sum,t)=>sum+Number(t.amount||0),0);
+
+  const expense=state.financeTransactions
+    .filter(t=>t.type==='expense' && String(t.date||'').slice(0,7)===monthKey)
+    .reduce((sum,t)=>sum+Number(t.amount||0),0);
+
+  return {
+    opening,
+    duesIncome,
+    otherIncome,
+    expense,
+    closing:opening+duesIncome+otherIncome-expense
+  };
+}
+
+function renderMonthlySettlement(monthKey){
+  if(!$('settlementOpening'))return;
+  const x=calculateMonthlySettlement(monthKey);
+  const [y,m]=monthKey.split('-');
+  $('financeSettlementMonth').textContent=`${y}년 ${Number(m)}월`;
+  $('settlementOpening').textContent=`${x.opening.toLocaleString()}원`;
+  $('settlementDuesIncome').textContent=`${x.duesIncome.toLocaleString()}원`;
+  $('settlementOtherIncome').textContent=`${x.otherIncome.toLocaleString()}원`;
+  $('settlementExpense').textContent=`${x.expense.toLocaleString()}원`;
+  $('settlementClosing').textContent=`${x.closing.toLocaleString()}원`;
+}
+
+function exportFinanceCsv(){
+  const monthKey=$('financeMonthSelect').value||currentMonthKey();
+  const settlement=calculateMonthlySettlement(monthKey);
+
+  const rows=[
+    ['구분','일자','항목','내용','금액'],
+    ['전월이월','','','',''+settlement.opening],
+  ];
+
+  state.duesPayments
+    .filter(d=>d.paid && d.monthKey===monthKey)
+    .forEach(d=>{
+      const m=state.members.find(x=>x.id===d.memberId);
+      rows.push(['회비수입',d.paidAt?String(d.paidAt).slice(0,10):monthKey+'-01',m?.name||'',m?.group||'',String(d.amount||0)]);
+    });
+
+  state.financeTransactions
+    .filter(t=>String(t.date||'').slice(0,7)===monthKey)
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)))
+    .forEach(t=>{
+      rows.push([
+        t.type==='income'?'기타수입':'지출',
+        t.date,
+        t.category,
+        t.memo||'',
+        String(t.type==='income'?Number(t.amount||0):-Number(t.amount||0))
+      ]);
+    });
+
+  rows.push(['월말잔액','','','',''+settlement.closing]);
+
+  const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`JASNAL_회비정산_${monthKey}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+$('exportFinanceCsvBtn').addEventListener('click',exportFinanceCsv);
+
 function renderFinanceLedger(){
   if(!$('financeLedgerList'))return;
   if(!$('financeMonthSelect').options.length)makeFinanceMonthOptions();
@@ -1991,6 +2111,7 @@ function renderFinanceLedger(){
   const monthKey=$('financeMonthSelect').value||currentMonthKey();
   const typeFilter=$('financeTypeFilter').value||'';
   const x=calculateFinanceSummary(monthKey);
+  renderMonthlySettlement(monthKey);
 
   $('financeCurrentBalance').textContent=`${x.balance.toLocaleString()}원`;
   $('financeMonthIncome').textContent=`${x.monthIncome.toLocaleString()}원`;
